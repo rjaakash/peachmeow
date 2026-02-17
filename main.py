@@ -21,9 +21,9 @@ DRY = args.dry_run
 SIGNING_KEYSTORE_PASSWORD = require_env("SIGNING_KEYSTORE_PASSWORD")
 SIGNING_KEY_ALIAS = require_env("SIGNING_KEY_ALIAS")
 SIGNING_KEY_PASSWORD = require_env("SIGNING_KEY_PASSWORD")
-PUBLISH_PAT = require_env("PUBLISH_PAT")
+PEACHMEOW_GITHUB_PAT = require_env("PEACHMEOW_GITHUB_PAT")
 
-HEAD = {"Authorization": f"token {PUBLISH_PAT}"}
+HEAD = {"Authorization": f"token {PEACHMEOW_GITHUB_PAT}"}
 
 def gh(url):
     r = requests.get(url, headers=HEAD, timeout=60)
@@ -68,8 +68,6 @@ else:
 if not DRY:
     mkdir_clean("temp", "tools", "patches", "build")
 
-# ================= CLI =================
-
 CLI_VERSION = resolve(global_cli, global_cli_mode)
 
 cli_rel = gh(
@@ -90,8 +88,6 @@ if not DRY:
     if download_with_retry(CLI_URL, "tools/morphe-cli.jar") != 0:
         die("CLI download failed")
 
-# ================= APKEditor =================
-
 apkeditor = ""
 for r in gh("https://api.github.com/repos/REAndroid/APKEditor/releases"):
     if not r["prerelease"]:
@@ -104,8 +100,6 @@ for r in gh("https://api.github.com/repos/REAndroid/APKEditor/releases"):
 if apkeditor and not DRY:
     if download_with_retry(apkeditor, "tools/apkeditor.jar") != 0:
         die("apkeditor download failed")
-
-# ================= BUILD LOOP =================
 
 for table, app in apps.items():
 

@@ -8,11 +8,11 @@ from pathlib import Path
 CONFIG_FILE = "config.toml"
 VERSIONS_FILE = "versions.json"
 
-PUBLISH_PAT = os.environ.get("PUBLISH_PAT")
+PEACHMEOW_GITHUB_PAT = os.environ.get("PEACHMEOW_GITHUB_PAT")
 
 HEADERS = {}
-if PUBLISH_PAT:
-    HEADERS["Authorization"] = f"token {PUBLISH_PAT}"
+if PEACHMEOW_GITHUB_PAT:
+    HEADERS["Authorization"] = f"token {PEACHMEOW_GITHUB_PAT}"
 
 def die(m):
     print(m, flush=True)
@@ -94,7 +94,6 @@ def main():
         print("  latest :", latest)
         print("  stored :", prev_version)
 
-        # ONLY patch version matters (mode ignored)
         if latest and latest != prev_version:
             changed.append(src)
 

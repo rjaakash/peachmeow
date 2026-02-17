@@ -3,7 +3,7 @@ name: CI
 on:
   workflow_dispatch:
   schedule:
-    - cron: "35 12 * * *"
+    - cron: "05 12 * * *"
 
 permissions:
   contents: read
@@ -16,5 +16,5 @@ jobs:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y python3 gh
       - env:
-          PUBLISH_PAT: ${{ secrets.PUBLISH_PAT }}
+          PEACHMEOW_GITHUB_PAT: ${{ secrets.PEACHMEOW_GITHUB_PAT }}
         run: python3 resolver.py

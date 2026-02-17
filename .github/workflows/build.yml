@@ -37,7 +37,7 @@ jobs:
           SIGNING_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
-          PUBLISH_PAT: ${{ secrets.PUBLISH_PAT }}
+          PEACHMEOW_GITHUB_PAT: ${{ secrets.PEACHMEOW_GITHUB_PAT }}
         run: |
           if [ -z "${{ github.event.inputs.source }}" ]; then
             python3 main.py
