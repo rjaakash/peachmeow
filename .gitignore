@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual envs
+venv/
+.env/
+.venv/
+
+# Runtime build folders (generated)
+temp/
+tools/
+patches/
+build/
+
+# Downloaded artifacts
+*.apk
+*.apkm
+*.jar
+
+# Local keystore
+morphe-release.bks
+
+# Logs
+*.log
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+
+# Curl leftovers
+*.part
+
+# Safety: never commit secrets
+*.env

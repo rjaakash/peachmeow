@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "35 12 * * *"
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  resolver:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y python3 gh
+      - env:
+          PUBLISH_PAT: ${{ secrets.PUBLISH_PAT }}
+        run: python3 resolver.py
