@@ -16,9 +16,11 @@ Every app MUST:
 
 Minimal example:
 
+```toml
 [YouTube]
 package-name = "com.google.android.youtube"
 app-source = "rjaakash/peachmeow-store"
+```
 
 ---
 
@@ -26,17 +28,19 @@ app-source = "rjaakash/peachmeow-store"
 
 Each app must be declared as a TOML table:
 
+```toml
 [YouTube]
+```
 
-The table name is mandatory.
-
-If `app-name` is not set, this table name is used for output filenames.
+The table name itself is mandatory.
 
 ---
 
 ## package-name (MANDATORY)
 
+```toml
 package-name = "com.google.android.youtube"
+```
 
 Android package ID.
 
@@ -46,7 +50,9 @@ Used to match compatible versions from patches-list.
 
 ## app-source (MANDATORY)
 
+```toml
 app-source = "username/repository"
+```
 
 GitHub repository containing base APK releases.
 
@@ -54,18 +60,25 @@ Only GitHub is supported.
 
 This repo MUST publish releases like:
 
+```
 YouTube-19.05.36
 Music-7.16.53
+```
 
 Assets MUST be named:
 
+```
 YouTube-19.05.36.apk
 Music-7.16.53.apk
+```
 
 APKM is also supported.
 
-If APK exists → used directly  
-If APKM exists → merged automatically via APKEditor  
+Build logic:
+
+1. APK is attempted first  
+2. If APK download fails → APKM is downloaded  
+3. APKM is merged automatically using APKEditor  
 
 This naming format is user responsibility.
 
@@ -77,21 +90,48 @@ All global fields are optional.
 
 If missing or empty ("") these defaults apply:
 
+```toml
 enabled = true
 patches-source = "MorpheApp/morphe-patches"
 cli-source = "MorpheApp/morphe-cli"
 morphe-brand = "Morphe"
 patches-version = "latest"
 cli-version = "latest"
-patches-list = "https://github.com/MorpheApp/morphe-patches/blob/main/patches-list.json"
+patches-list = ""
 version = "auto"
+```
+
+If `patches-list` is empty or missing, it is fetched automatically from:
+
+```
+https://raw.githubusercontent.com/<patches-source>/<branch>/patches-list.json
+```
+
+`<branch>` is selected automatically based on the resolved patch release:
+
+- `dev` if the selected patch release is a prerelease
+- `main` if the selected patch release is stable
+
+This applies to:
+
+- `patches-version = dev`
+- `patches-version = all`
+- exact tags (example: `4.0.0-dev.3`)
+
+If `patches-list` is explicitly set to a GitHub blob URL, it is converted to raw automatically and branch logic is skipped.
 
 ---
 
 ## enabled
 
+```toml
+enabled = true
+```
+
 true  → build  
 false → skip  
+
+Disabled apps are ALWAYS skipped, even when `--source` is used.
 
 ---
 
@@ -101,7 +141,9 @@ GitHub repo providing patch releases (.mpp)
 
 Format:
 
+```
 username/repository
+```
 
 ---
 
@@ -111,7 +153,9 @@ GitHub repo providing Morphe CLI
 
 Format:
 
+```
 username/repository
+```
 
 ---
 
@@ -119,29 +163,29 @@ username/repository
 
 Brand used in final APK filename.
 
-Can be anything:
+Examples:
 
-Morphe  
-Anddea  
-RVX  
-Peach  
-
----
-
-## patches-version
-
-Which patch version to use:
-
-latest  → newest stable  
-dev     → newest prerelease  
-all     → newest regardless  
-X.Y.Z   → exact version (example: 4.0.0)
+```
+Morphe
+Anddea
+RVX
+Peach
+```
 
 ---
 
-## cli-version
+## patches-version / cli-version
 
-Same options as patches-version, but for CLI.
+Version selector logic:
+
+```
+latest     → newest stable release (non‑prerelease)
+dev        → newest prerelease ONLY
+all        → newest release (stable or prerelease)
+<any tag>  → exact release tag (example: 4.0.0 or 4.0.0-dev.3)
+```
+
+Both `patches-version` and `cli-version` use the same rules.
 
 ---
 
@@ -149,9 +193,9 @@ Same options as patches-version, but for CLI.
 
 Patch compatibility list.
 
-Used only when version = auto.
+Used only when `version = auto`.
 
-Blob URLs are converted to raw automatically.
+If defined inside an app table, it overrides the global value.
 
 ---
 
@@ -159,7 +203,7 @@ Blob URLs are converted to raw automatically.
 
 Controls base APK version.
 
-auto:
+`auto`:
 
 1. Reads patches-list  
 2. Finds compatible versions for package-name  
@@ -168,7 +212,9 @@ auto:
 
 Manual override:
 
+```toml
 version = "19.05.36"
+```
 
 If manually set, auto logic is skipped.
 
@@ -176,18 +222,21 @@ If manually set, auto logic is skipped.
 
 # App Options (Optional / Overrides)
 
-These fields may be set per app and override global defaults:
+These fields can be defined per app and override global defaults:
 
-app-name  
-enabled  
-patches-source  
-cli-source  
-morphe-brand  
-patches-version  
-cli-version  
-patches-list  
-version  
-patcher-args  
+```
+app-name
+enabled
+patches-source
+cli-source
+morphe-brand
+patches-version
+cli-version
+patches-list
+version
+patcher-args
+variant
+```
 
 If omitted or empty, global values apply.
 
@@ -197,19 +246,37 @@ If omitted or empty, global values apply.
 
 Used only for:
 
-- APK filename
-- Release notes
+- APK filename  
+- Release notes  
 
-If not set, table name is used.
+If not set, the table name is used.
+
+---
+
+## variant (optional)
+
+```toml
+variant = "AFN-Blue"
+```
+
+Adds a variant label to the output filename.
+
+Output format:
+
+```
+<AppName>-v<AppVersion>-<Brand>-<variant>-v<PatchVersion>.apk
+```
 
 ---
 
 ## patcher-args (optional)
 
+```toml
 patcher-args = """
 -e "Custom branding name for YouTube"
 -OappIcon=xisr_yellow
 """
+```
 
 Raw Morphe CLI arguments.
 
@@ -217,18 +284,42 @@ Passed directly to CLI.
 
 ---
 
+# CLI Options
+
+Limit builds to a specific patch source:
+
+```
+python main.py --source username/repository
+```
+
+Dry run mode:
+
+```
+python main.py --dry-run
+```
+
+---
+
 # APK Output Naming
 
 Final APK filename:
 
+```
 <AppName>-v<AppVersion>-<Brand>-v<PatchVersion>.apk
+```
 
 Examples:
 
-YouTube-v19.05.36-Anddea-v4.0.0-dev.3.apk  
-Music-v7.16.53-Morphe-v4.0.0.apk  
+```
+YouTube-v19.05.36-Anddea-v4.0.0-dev.3.apk
+Music-v7.16.53-Morphe-v4.0.0.apk
+```
 
-If app-name is not set, table name is used.
+If `variant` is set:
+
+```
+YouTube-v19.05.36-Anddea-AFN-Blue-v4.0.0.apk
+```
 
 ---
 

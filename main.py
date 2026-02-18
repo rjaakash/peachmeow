@@ -55,12 +55,23 @@ def resolve(repo, mode):
     if mode == "latest":
         for r in rel:
             if not r["prerelease"]:
-                return r["tag_name"].lstrip("v")
+                return r["tag_name"].lstrip("v"), False
 
-    if mode in ("dev", "all"):
-        return rel[0]["tag_name"].lstrip("v")
+    if mode == "dev":
+        for r in rel:
+            if r["prerelease"]:
+                return r["tag_name"].lstrip("v"), True
+        die(f"No prerelease found for {repo}")
 
-    return mode
+    if mode == "all":
+        return rel[0]["tag_name"].lstrip("v"), rel[0]["prerelease"]
+
+    tag = mode.lstrip("v")
+    for r in rel:
+        if r["tag_name"].lstrip("v") == tag:
+            return tag, r["prerelease"]
+
+    return tag, False
 
 if BUILD_SOURCE:
     targets = {BUILD_SOURCE}
@@ -74,7 +85,7 @@ else:
 if not DRY:
     mkdir_clean("temp", "tools", "patches", "build")
 
-CLI_VERSION = resolve(global_cli, global_cli_mode)
+CLI_VERSION, _ = resolve(global_cli, global_cli_mode)
 
 cli_rel = gh(f"https://api.github.com/repos/{global_cli}/releases/tags/v{CLI_VERSION}")
 
@@ -119,7 +130,7 @@ for table, app in apps.items():
         continue
 
     mode = app.get("patches-version") or global_patch_mode
-    PATCH_VERSION = resolve(src, mode)
+    PATCH_VERSION, IS_PRE = resolve(src, mode)
 
     used_patch_versions[src] = PATCH_VERSION
 
@@ -135,13 +146,13 @@ for table, app in apps.items():
     brand = app.get("morphe-brand") or global_brand
     release_brand = brand
     name = app.get("app-name") or table
-    variant = app.get("Variant")
+    variant = app.get("variant")
     vm = app.get("version") or "auto"
 
     if app.get("patches-list"):
         plist = gh_blob_to_raw(app.get("patches-list"))
     else:
-        branch = "dev" if mode in ("dev", "all") else "main"
+        branch = "dev" if IS_PRE else "main"
         plist = f"https://raw.githubusercontent.com/{src}/{branch}/patches-list.json"
 
     if vm == "auto":
@@ -210,7 +221,7 @@ for table, app in apps.items():
         out
     ] + shlex.split(app.get("patcher-args", "")))
 
-    built.append(final)
+    built.append((table, final))
 
 if DRY:
     print("[✓] Dry run complete")
@@ -229,9 +240,9 @@ is_prerelease = rel.get("prerelease", False)
 lines = []
 lines.append("## Versions\n")
 
-for f in built:
+for table, f in built:
     a = f.split("-v")
-    lines.append(f"- {a[0]}: {a[1].split('-')[0]}")
+    lines.append(f"- {table}: {a[1].split('-')[0]}")
 
 lines.append(f"- Patch: {patch_ver}")
 lines.append(f"- CLI: {CLI_VERSION}")
@@ -243,7 +254,7 @@ Path("release.md").write_text("\n".join(lines))
 tag = f"{release_brand}-v{patch_ver}"
 release_name = f"{release_brand} 🐱 PeachMeow v{patch_ver}"
 
-cmd = ["gh","release","create",tag,"-t",release_name,"-F","release.md"] + [f"build/{x}" for x in built]
+cmd = ["gh","release","create",tag,"-t",release_name,"-F","release.md"] + [f"build/{x}" for _, x in built]
 
 if is_prerelease:
     cmd.append("--prerelease")
