@@ -32,6 +32,9 @@ jobs:
         run: |
           echo "${{ secrets.SIGNING_KEYSTORE_B64 }}" | base64 -d > morphe-release.bks
 
+      - name: Authenticate gh
+        run: echo "${{ secrets.PEACHMEOW_GITHUB_PAT }}" | gh auth login --with-token
+
       - name: Run builder
         env:
           SIGNING_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}

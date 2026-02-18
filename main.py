@@ -4,11 +4,13 @@ import tomllib
 import argparse
 import requests
 import shlex
+import subprocess
 from pathlib import Path
 from packaging.version import Version
 from utils import *
 
 CONFIG_FILE = "config.toml"
+VERSIONS_FILE = "versions.json"
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--source")
@@ -22,6 +24,10 @@ SIGNING_KEYSTORE_PASSWORD = require_env("SIGNING_KEYSTORE_PASSWORD")
 SIGNING_KEY_ALIAS = require_env("SIGNING_KEY_ALIAS")
 SIGNING_KEY_PASSWORD = require_env("SIGNING_KEY_PASSWORD")
 PEACHMEOW_GITHUB_PAT = require_env("PEACHMEOW_GITHUB_PAT")
+
+OWNER = os.environ.get("GITHUB_REPOSITORY")
+if not OWNER:
+    die("GITHUB_REPOSITORY missing")
 
 HEAD = {"Authorization": f"token {PEACHMEOW_GITHUB_PAT}"}
 
@@ -70,9 +76,7 @@ if not DRY:
 
 CLI_VERSION = resolve(global_cli, global_cli_mode)
 
-cli_rel = gh(
-    f"https://api.github.com/repos/{global_cli}/releases/tags/v{CLI_VERSION}"
-)
+cli_rel = gh(f"https://api.github.com/repos/{global_cli}/releases/tags/v{CLI_VERSION}")
 
 CLI_URL = None
 for a in cli_rel.get("assets", []):
@@ -101,6 +105,10 @@ if apkeditor and not DRY:
     if download_with_retry(apkeditor, "tools/apkeditor.jar") != 0:
         die("apkeditor download failed")
 
+built = []
+used_patch_versions = {}
+release_brand = global_brand
+
 for table, app in apps.items():
 
     if app.get("enabled", True) is False:
@@ -113,11 +121,10 @@ for table, app in apps.items():
     mode = app.get("patches-version") or global_patch_mode
     PATCH_VERSION = resolve(src, mode)
 
+    used_patch_versions[src] = PATCH_VERSION
+
     patch_file = f"patches/{src.split('/')[-1]}-{PATCH_VERSION}.mpp"
-    PATCH_URL = (
-        f"https://github.com/{src}/releases/download/v{PATCH_VERSION}/"
-        f"patches-{PATCH_VERSION}.mpp"
-    )
+    PATCH_URL = f"https://github.com/{src}/releases/download/v{PATCH_VERSION}/patches-{PATCH_VERSION}.mpp"
 
     if not DRY:
         if download_with_retry(PATCH_URL, patch_file) != 0:
@@ -126,7 +133,9 @@ for table, app in apps.items():
     pkg = app.get("package-name") or die(table)
     repo = app.get("app-source") or die(table)
     brand = app.get("morphe-brand") or global_brand
+    release_brand = brand
     name = app.get("app-name") or table
+    variant = app.get("Variant")
     vm = app.get("version") or "auto"
 
     if app.get("patches-list"):
@@ -149,9 +158,7 @@ for table, app in apps.items():
                     break
                 compat |= set(cp[pkg] or [])
 
-        rel = gh(
-            f"https://api.github.com/repos/{repo}/releases?per_page=100"
-        )
+        rel = gh(f"https://api.github.com/repos/{repo}/releases?per_page=100")
 
         avail = [
             x["tag_name"].replace(f"{name}-", "")
@@ -159,10 +166,7 @@ for table, app in apps.items():
             if x["tag_name"].startswith(f"{name}-")
         ]
 
-        cand = sorted(
-            avail if wildcard else set(compat) & set(avail),
-            key=Version
-        )
+        cand = sorted(avail if wildcard else set(compat) & set(avail), key=Version)
 
         if not cand:
             die(table)
@@ -171,50 +175,96 @@ for table, app in apps.items():
     else:
         APP = vm
 
-    final = f"{name}-v{APP}-{brand}-v{PATCH_VERSION}.apk"
+    if variant:
+        final = f"{name}-v{APP}-{brand}-{variant}-v{PATCH_VERSION}.apk"
+    else:
+        final = f"{name}-v{APP}-{brand}-v{PATCH_VERSION}.apk"
+
     print("Build:", final)
 
     if DRY:
         continue
 
-    APK = (
-        f"https://github.com/{repo}/releases/download/"
-        f"{name}-{APP}/{name}-{APP}.apk"
-    )
-    APKM = (
-        f"https://github.com/{repo}/releases/download/"
-        f"{name}-{APP}/{name}-{APP}.apkm"
-    )
+    APK = f"https://github.com/{repo}/releases/download/{name}-{APP}/{name}-{APP}.apk"
+    APKM = f"https://github.com/{repo}/releases/download/{name}-{APP}/{name}-{APP}.apkm"
 
     out = f"temp/{name}.apk"
 
     if download_with_retry(APK, out) != 0:
         if download_with_retry(APKM, f"temp/{name}.apkm") == 0:
-            run([
-                "java", "-jar", "tools/apkeditor.jar",
-                "m", "-f",
-                "-i", f"temp/{name}.apkm",
-                "-o", out
-            ])
+            run(["java","-jar","tools/apkeditor.jar","m","-f","-i",f"temp/{name}.apkm","-o",out])
         else:
             die(table)
 
     ensure_apk(out)
 
     run([
-        "java", "-jar", "tools/morphe-cli.jar", "patch",
-        "--keystore", "morphe-release.bks",
-        "--keystore-password", SIGNING_KEYSTORE_PASSWORD,
-        "--keystore-entry-alias", SIGNING_KEY_ALIAS,
-        "--keystore-entry-password", SIGNING_KEY_PASSWORD,
-        "-p", patch_file,
-        "-o", f"build/{final}",
+        "java","-jar","tools/morphe-cli.jar","patch",
+        "--keystore","morphe-release.bks",
+        "--keystore-password",SIGNING_KEYSTORE_PASSWORD,
+        "--keystore-entry-alias",SIGNING_KEY_ALIAS,
+        "--keystore-entry-password",SIGNING_KEY_PASSWORD,
+        "-p",patch_file,
+        "-o",f"build/{final}",
         "--purge",
         out
     ] + shlex.split(app.get("patcher-args", "")))
+
+    built.append(final)
 
 if DRY:
     print("[✓] Dry run complete")
     exit(0)
 
-print("[✓] Done")
+if not built:
+    die("Nothing built")
+
+patch_src = list(used_patch_versions.keys())[0]
+patch_ver = list(used_patch_versions.values())[0]
+
+rel = gh(f"https://api.github.com/repos/{patch_src}/releases/tags/v{patch_ver}")
+changelog = rel.get("body") or ""
+is_prerelease = rel.get("prerelease", False)
+
+lines = []
+lines.append("## Versions\n")
+
+for f in built:
+    a = f.split("-v")
+    lines.append(f"- {a[0]}: {a[1].split('-')[0]}")
+
+lines.append(f"- Patch: {patch_ver}")
+lines.append(f"- CLI: {CLI_VERSION}")
+lines.append("\n## Patch Changelog\n")
+lines.append(changelog)
+
+Path("release.md").write_text("\n".join(lines))
+
+tag = f"{release_brand}-v{patch_ver}"
+release_name = f"{release_brand} 🐱 PeachMeow v{patch_ver}"
+
+cmd = ["gh","release","create",tag,"-t",release_name,"-F","release.md"] + [f"build/{x}" for x in built]
+
+if is_prerelease:
+    cmd.append("--prerelease")
+
+subprocess.run(cmd, check=True)
+
+versions = {}
+if Path(VERSIONS_FILE).exists():
+    versions = json.loads(Path(VERSIONS_FILE).read_text())
+
+versions[patch_src] = {"version": patch_ver, "cli": CLI_VERSION}
+
+Path(VERSIONS_FILE).write_text(json.dumps(versions, indent=2))
+
+subprocess.run(["git","config","user.name","github-actions"],check=True)
+subprocess.run(["git","config","user.email","github-actions@github.com"],check=True)
+subprocess.run(["git","add",VERSIONS_FILE],check=True)
+
+msg = f"chore: {patch_src} → {patch_ver}"
+
+subprocess.run(["git","commit","-m",msg],check=True)
+subprocess.run(["git","push"],check=True)
+
+print("[✓] Release complete")

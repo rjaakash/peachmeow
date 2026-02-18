@@ -1,3 +1,7 @@
 [YouTube]
 package-name = "com.google.android.youtube"
-app-source = "rjaakash/peachmeow-store"
+app-source = "rjaakash/ci-artifact-index"
+
+[Reddit]
+package-name = "com.reddit.frontpage"
+app-source = "rjaakash/ci-artifact-index"
