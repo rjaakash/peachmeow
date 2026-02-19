@@ -10,6 +10,24 @@ app-source = "rjaakash/peachmeow-store"
 package-name = "com.reddit.frontpage"
 app-source = "rjaakash/peachmeow-store"
 
+[YouTube Anddea]
+app-name = "YouTube"
+package-name = "com.google.android.youtube"
+app-source = "rjaakash/peachmeow-store"
+patches-source = "anddea/revanced-patches"
+patches-version = "all"
+morphe-brand = "Anddea"
+patcher-args = "-e 'Custom header for YouTube' -e 'MaterialYou' -e 'Theme'"
+
+[Music Anddea]
+app-name = "Music"
+package-name = "com.google.android.apps.youtube.music"
+app-source = "rjaakash/peachmeow-store"
+patches-source = "anddea/revanced-patches"
+patches-version = "all"
+morphe-brand = "Anddea"
+patcher-args = "-e 'Custom header for YouTube Music'"
+
 [YouTube Anddea Xisr Yellow]
 app-name = "YouTube"
 package-name = "com.google.android.youtube"
@@ -69,6 +87,28 @@ patches-version = "all"
 morphe-brand = "Anddea"
 variant = "Revancify-Red"
 patcher-args = "-e 'Custom header for YouTube Music' -e 'Custom branding icon for YouTube Music' -OappIcon=revancify_red -OrestoreOldSplashIcon=true -e 'Custom branding name for YouTube Music' -OappNameNotification=Music -OappNameLauncher=Music -e 'Settings for YouTube Music' -OrvxSettingsLabel=Anddea -e 'Visual preferences icons for YouTube Music' -OsettingsMenuIcon=rvx_letters_bold -OapplyToAll=false"
+
+[YouTube Anddea Legacy]
+app-name = "YouTube"
+package-name = "com.google.android.youtube"
+app-source = "rjaakash/peachmeow-store"
+patches-source = "anddea/revanced-patches"
+patches-version = "all"
+morphe-brand = "Anddea"
+variant = "Legacy"
+version = "19.05.36"
+patcher-args = "-e 'Custom branding name for YouTube' -e 'Custom header for YouTube' -e 'Hide shortcuts' -e 'Theme' -e 'Custom branding icon for YouTube' -OappIcon=revancify_blue -OrestoreOldSplashAnimation=true -e 'Overlay buttons' -OiconType=rounded -e 'Settings for YouTube' -OrvxSettingsLabel=Anddea -e 'Visual preferences icons for YouTube' -OsettingsMenuIcon=rvx_letters_bold -OapplyToAll=false"
+
+[Music Anddea Legacy]
+app-name = "Music"
+package-name = "com.google.android.apps.youtube.music"
+app-source = "rjaakash/peachmeow-store"
+patches-source = "anddea/revanced-patches"
+patches-version = "all"
+morphe-brand = "Anddea"
+variant = "Legacy"
+version = "7.16.53"
+patcher-args = "-e 'Custom header for YouTube Music' -e 'Custom branding icon for YouTube Music' -OappIcon=revancify_blue -OrestoreOldSplashIcon=true -e 'Custom branding name for YouTube Music' -OappNameNotification=Music -OappNameLauncher=Music -e 'Settings for YouTube Music' -OrvxSettingsLabel=Anddea -e 'Visual preferences icons for YouTube Music' -OsettingsMenuIcon=rvx_letters_bold -OapplyToAll=false"
 
 [YouTube RVX Morphed AFN Blue]
 app-name = "YouTube"
