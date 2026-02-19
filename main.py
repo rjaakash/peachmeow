@@ -276,6 +276,8 @@ subprocess.run(["git","add",VERSIONS_FILE],check=True)
 msg = f"chore: {patch_src} → {patch_ver}"
 
 subprocess.run(["git","commit","-m",msg],check=True)
+
+subprocess.run(["git","pull","--rebase"],check=True)
 subprocess.run(["git","push"],check=True)
 
 print("[✓] Release complete")
