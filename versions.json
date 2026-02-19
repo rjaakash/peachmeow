@@ -1,4 +1,16 @@
 {
+  "MorpheApp/morphe-patches": {
+    "version": "1.14.0",
+    "cli": "1.3.0"
+  },
+  "anddea/revanced-patches": {
+    "version": "4.0.0-dev.3",
+    "cli": "1.3.0"
+  },
+  "wchill/rvx-morphed": {
+    "version": "5.16.2",
+    "cli": "1.3.0"
+  },
   "crimera/piko": {
     "version": "3.0.0-dev.2",
     "cli": "1.3.0"
