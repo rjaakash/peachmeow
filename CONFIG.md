@@ -247,7 +247,6 @@ If omitted or empty, global values apply.
 Used only for:
 
 - APK filename  
-- Release notes  
 
 If not set, the table name is used.
 
@@ -260,12 +259,6 @@ variant = "AFN-Blue"
 ```
 
 Adds a variant label to the output filename.
-
-Output format:
-
-```
-<AppName>-v<AppVersion>-<Brand>-<variant>-v<PatchVersion>.apk
-```
 
 ---
 
@@ -302,7 +295,20 @@ python main.py --dry-run
 
 # APK Output Naming
 
-Final APK filename:
+When version = auto:
+
+```
+<AppName>-<Brand>-v<PatchVersion>.apk
+```
+
+Examples:
+
+```
+YouTube-Anddea-v4.0.0-dev.3.apk  
+Music-Morphe-v4.0.0.apk
+```
+
+When version is manually set:
 
 ```
 <AppName>-v<AppVersion>-<Brand>-v<PatchVersion>.apk
@@ -311,14 +317,15 @@ Final APK filename:
 Examples:
 
 ```
-YouTube-v19.05.36-Anddea-v4.0.0-dev.3.apk
+YouTube-v19.05.36-Anddea-v4.0.0-dev.3.apk  
 Music-v7.16.53-Morphe-v4.0.0.apk
 ```
 
-If `variant` is set:
+If variant is set:
 
 ```
-YouTube-v19.05.36-Anddea-AFN-Blue-v4.0.0.apk
+YouTube-Anddea-AFN-Blue-v4.0.0-dev.3.apk  
+Music-v7.16.53-Anddea-AFN-Blue-v4.0.0.apk
 ```
 
 ---

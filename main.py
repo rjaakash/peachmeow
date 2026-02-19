@@ -186,10 +186,19 @@ for table, app in apps.items():
     else:
         APP = vm
 
+    parts = [name]
+
+    if vm != "auto":
+        parts.append(f"v{APP}")
+
+    parts.append(brand)
+
     if variant:
-        final = f"{name}-v{APP}-{brand}-{variant}-v{PATCH_VERSION}.apk"
-    else:
-        final = f"{name}-v{APP}-{brand}-v{PATCH_VERSION}.apk"
+        parts.append(variant)
+
+    parts.append(f"v{PATCH_VERSION}")
+
+    final = "-".join(parts) + ".apk"
 
     print("Build:", final)
 
@@ -242,7 +251,7 @@ lines.append("## Versions\n")
 
 for table, f in built:
     a = f.split("-v")
-    lines.append(f"- {table}: {a[1].split('-')[0]}")
+    lines.append(f"- {table}: {a[-1].split('-')[0]}")
 
 lines.append(f"- Patch: {patch_ver}")
 lines.append(f"- CLI: {CLI_VERSION}")
@@ -276,7 +285,6 @@ subprocess.run(["git","add",VERSIONS_FILE],check=True)
 msg = f"chore: {patch_src} → {patch_ver}"
 
 subprocess.run(["git","commit","-m",msg],check=True)
-
 subprocess.run(["git","pull","--rebase"],check=True)
 subprocess.run(["git","push"],check=True)
 
