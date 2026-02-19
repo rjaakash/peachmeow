@@ -17,4 +17,5 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y python3 gh
       - env:
           PEACHMEOW_GITHUB_PAT: ${{ secrets.PEACHMEOW_GITHUB_PAT }}
+          GH_TOKEN: ${{ secrets.PEACHMEOW_GITHUB_PAT }}
         run: python3 resolver.py
