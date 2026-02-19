@@ -6,7 +6,7 @@ on:
     - cron: "05 12 * * *"
 
 permissions:
-  contents: read
+  contents: write
   actions: write
 
 jobs:
@@ -14,8 +14,35 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - run: sudo apt-get update && sudo apt-get install -y python3 gh
+
       - env:
           PEACHMEOW_GITHUB_PAT: ${{ secrets.PEACHMEOW_GITHUB_PAT }}
           GH_TOKEN: ${{ secrets.PEACHMEOW_GITHUB_PAT }}
-        run: python3 resolver.py
+        run: |
+          set -e
+
+          python3 resolver.py
+
+          gh release list --limit 200 --json tagName -q '.[].tagName' |
+          awk -F'-v' '{print $1}' |
+          sort -u |
+          while read BRAND; do
+            TAGS=$(gh release list --limit 200 --json tagName -q '.[].tagName' | grep "^$BRAND-v" | sort -V)
+            KEEP=$(echo "$TAGS" | tail -n1)
+            echo "$TAGS" | grep -vx "$KEEP" | while read OLD; do
+              gh release delete "$OLD" -y || true
+              git push origin ":refs/tags/$OLD" || true
+            done
+          done
+
+          RUNS=$(gh run list --limit 200 --json databaseId -q '.[].databaseId')
+
+          COUNT=0
+          for ID in $RUNS; do
+            COUNT=$((COUNT+1))
+            if [ $COUNT -gt 10 ]; then
+              gh run delete "$ID"
+            fi
+          done
