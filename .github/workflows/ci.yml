@@ -25,18 +25,6 @@ jobs:
 
           python3 resolver.py
 
-          gh release list --limit 200 --json tagName -q '.[].tagName' |
-          awk -F'-v' '{print $1}' |
-          sort -u |
-          while read BRAND; do
-            TAGS=$(gh release list --limit 200 --json tagName -q '.[].tagName' | grep "^$BRAND-v" | sort -V)
-            KEEP=$(echo "$TAGS" | tail -n1)
-            echo "$TAGS" | grep -vx "$KEEP" | while read OLD; do
-              gh release delete "$OLD" -y || true
-              git push origin ":refs/tags/$OLD" || true
-            done
-          done
-
           RUNS=$(gh run list --limit 200 --json databaseId -q '.[].databaseId')
 
           COUNT=0

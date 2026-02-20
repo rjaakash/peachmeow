@@ -37,6 +37,49 @@ def gh(url):
         die(f"GitHub API failed: {url}")
     return r.json()
 
+def cleanup_old_releases(active_brands, keep_tag):
+    r = subprocess.run(
+        [
+            "gh","release","list",
+            "--limit","200",
+            "--json","tagName",
+            "-q",".[].tagName"
+        ],
+        capture_output=True,
+        text=True,
+        check=True
+    )
+
+    tags = set(r.stdout.splitlines())
+
+    seen_brands = set()
+    for t in tags:
+        if "-v" in t:
+            seen_brands.add(t.split("-v",1)[0])
+
+    for brand in seen_brands:
+        brand_tags = sorted([t for t in tags if t.startswith(f"{brand}-v")])
+
+        if brand not in active_brands:
+            for t in brand_tags:
+                print("Delete removed brand release:", t)
+                subprocess.run(["gh","release","delete", t, "-y"], check=False)
+                subprocess.run(["git","push","origin", f":refs/tags/{t}"], check=False)
+            continue
+
+        if not brand_tags:
+            continue
+
+        latest = brand_tags[-1]
+
+        for t in brand_tags:
+            if t == latest:
+                continue
+
+            print("Delete old release:", t)
+            subprocess.run(["gh","release","delete", t, "-y"], check=False)
+            subprocess.run(["git","push","origin", f":refs/tags/{t}"], check=False)
+
 cfg = tomllib.loads(Path(CONFIG_FILE).read_text())
 
 global_patches = cfg.get("patches-source") or "MorpheApp/morphe-patches"
@@ -287,5 +330,8 @@ msg = f"chore: {patch_src} → {patch_ver}"
 subprocess.run(["git","commit","-m",msg],check=True)
 subprocess.run(["git","pull","--rebase"],check=True)
 subprocess.run(["git","push"],check=True)
+
+active_brands = {a.get("morphe-brand") or global_brand for a in apps.values() if a.get("enabled", True)}
+cleanup_old_releases(active_brands, tag)
 
 print("[✓] Release complete")

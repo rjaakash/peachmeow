@@ -34,6 +34,22 @@ Each app must be declared as a TOML table:
 
 The table name itself is mandatory.
 
+If the table name does NOT contain spaces, quotes are not required:
+
+```toml
+[YouTube]
+[Music]
+[Reddit]
+```
+
+If the table name contains spaces, it must be wrapped in quotes:
+
+```toml
+["YouTube Anddea"]
+["Music Anddea"]
+["YouTube RVX Morphed AFN Blue"]
+```
+
 ---
 
 ## package-name (MANDATORY)

@@ -82,6 +82,33 @@ def main():
 
         sources[src] = mode
 
+    active = set(sources.keys())
+
+    dirty = False
+    removed = []
+
+    for k in list(old.keys()):
+        if k not in active:
+            print("[-] Removing stale source from versions.json:", k)
+            old.pop(k)
+            removed.append(k)
+            dirty = True
+
+    if dirty:
+        Path(VERSIONS_FILE).write_text(json.dumps(old, indent=2))
+
+        subprocess.run(["git","config","user.name","github-actions"], check=True)
+        subprocess.run(["git","config","user.email","github-actions@github.com"], check=True)
+        subprocess.run(["git","add",VERSIONS_FILE], check=True)
+
+        if len(removed) == 1:
+            msg = f"chore: cleanup versions.json → {removed[0]}"
+        else:
+            msg = "chore: cleanup versions.json → " + ", ".join(removed)
+
+        subprocess.run(["git","commit","-m", msg], check=False)
+        subprocess.run(["git","push"], check=True)
+
     changed = []
 
     for src, mode in sources.items():
