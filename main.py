@@ -273,7 +273,7 @@ for table, app in apps.items():
         out
     ] + shlex.split(app.get("patcher-args", "")))
 
-    built.append((table, final))
+    built.append((table, final, APP, variant))
 
 if DRY:
     print("[✓] Dry run complete")
@@ -290,11 +290,46 @@ changelog = rel.get("body") or ""
 is_prerelease = rel.get("prerelease", False)
 
 lines = []
-lines.append("## Versions\n")
 
-for table, f in built:
-    a = f.split("-v")
-    lines.append(f"- {table}: {a[-1].split('-')[0]}")
+has_variants = any(v for _,_,_,v in built)
+
+if not has_variants:
+
+    lines.append("## App Versions\n")
+
+    for table, _, appv, _ in built:
+        lines.append(f"{table}: {appv}")
+
+    lines.append("")
+    lines.append("## Build Info\n")
+
+else:
+
+    grouped = {}
+    for table, _, appv, variant in built:
+        grouped.setdefault(table, []).append((variant, appv))
+
+    for app in sorted(grouped.keys()):
+
+        lines.append(f"## {app} Versions\n")
+
+        items = grouped[app]
+
+        def sort_key(item):
+            variant, _ = item
+            if not variant:
+                return (0, "")
+            if variant.lower() == "legacy":
+                return (2, "")
+            return (1, variant.lower())
+
+        for variant, appv in sorted(items, key=sort_key):
+            label = variant if variant else "Base"
+            lines.append(f"- {label}: {appv}")
+
+        lines.append("")
+
+    lines.append("## Build Info\n")
 
 lines.append(f"- Patch: {patch_ver}")
 lines.append(f"- CLI: {CLI_VERSION}")
@@ -306,7 +341,7 @@ Path("release.md").write_text("\n".join(lines))
 tag = f"{release_brand}-v{patch_ver}"
 release_name = f"{release_brand} 🐱 PeachMeow v{patch_ver}"
 
-cmd = ["gh","release","create",tag,"-t",release_name,"-F","release.md"] + [f"build/{x}" for _, x in built]
+cmd = ["gh","release","create",tag,"-t",release_name,"-F","release.md"] + [f"build/{x}" for _, x,_,_ in built]
 
 if is_prerelease:
     cmd.append("--prerelease")
