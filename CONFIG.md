@@ -6,6 +6,9 @@ It defines mandatory fields, global defaults, and optional per-app overrides.
 
 ---
 
+
+---
+
 # Mandatory Fields
 
 Every app MUST:
@@ -100,54 +103,22 @@ This naming format is user responsibility.
 
 ---
 
+
+---
+
 # Global Default Values
 
 All global fields are optional.
 
-If missing or empty ("") these defaults apply:
+If a global field is missing or empty, these defaults apply:
 
 ```toml
-enabled = true
 patches-source = "MorpheApp/morphe-patches"
 cli-source = "MorpheApp/morphe-cli"
 morphe-brand = "Morphe"
 patches-version = "latest"
 cli-version = "latest"
-patches-list = ""
-version = "auto"
 ```
-
-If `patches-list` is empty or missing, it is fetched automatically from:
-
-```
-https://raw.githubusercontent.com/<patches-source>/<branch>/patches-list.json
-```
-
-`<branch>` is selected automatically based on the resolved patch release:
-
-- `dev` if the selected patch release is a prerelease
-- `main` if the selected patch release is stable
-
-This applies to:
-
-- `patches-version = dev`
-- `patches-version = all`
-- exact tags (example: `4.0.0-dev.3`)
-
-If `patches-list` is explicitly set to a GitHub blob URL, it is converted to raw automatically and branch logic is skipped.
-
----
-
-## enabled
-
-```toml
-enabled = true
-```
-
-true  → build  
-false → skip  
-
-Disabled apps are ALWAYS skipped, even when `--source` is used.
 
 ---
 
@@ -177,7 +148,11 @@ username/repository
 
 ## morphe-brand
 
-Brand used in final APK filename.
+Brand used in:
+
+- Final APK filename
+- GitHub release tag
+- GitHub release title
 
 Examples:
 
@@ -195,7 +170,7 @@ Peach
 Version selector logic:
 
 ```
-latest     → newest stable release (non‑prerelease)
+latest     → newest stable release (non-prerelease)
 dev        → newest prerelease ONLY
 all        → newest release (stable or prerelease)
 <any tag>  → exact release tag (example: 4.0.0 or 4.0.0-dev.3)
@@ -205,34 +180,6 @@ Both `patches-version` and `cli-version` use the same rules.
 
 ---
 
-## patches-list
-
-Patch compatibility list.
-
-Used only when `version = auto`.
-
-If defined inside an app table, it overrides the global value.
-
----
-
-## version
-
-Controls base APK version.
-
-`auto`:
-
-1. Reads patches-list  
-2. Finds compatible versions for package-name  
-3. Reads app-source releases  
-4. Picks highest common version  
-
-Manual override:
-
-```toml
-version = "19.05.36"
-```
-
-If manually set, auto logic is skipped.
 
 ---
 
@@ -260,11 +207,25 @@ If omitted or empty, global values apply.
 
 ## app-name (optional)
 
-Used only for:
+Used for:
 
-- APK filename  
+- APK output filename
+- Release notes section headers
 
 If not set, the table name is used.
+
+---
+
+## enabled
+
+```toml
+enabled = true
+```
+
+true  → build  
+false → skip  
+
+enabled = false skips the app before --source filtering is applied.
 
 ---
 
@@ -274,7 +235,7 @@ If not set, the table name is used.
 variant = "AFN-Blue"
 ```
 
-Adds a variant label to the output filename.
+Adds a variant label to the APK filename and changes release notes into grouped “per-app versions” format.
 
 ---
 
@@ -293,19 +254,58 @@ Passed directly to CLI.
 
 ---
 
-# CLI Options
+## patches-list
 
-Limit builds to a specific patch source:
+Patch compatibility list.
+
+Used only when `version = auto`.
+
+If defined inside an app table, it overrides the automatic fetch.
+
+If `patches-list` is not defined inside an app table, it is fetched automatically from the patch repository:
 
 ```
-python main.py --source username/repository
+https://raw.githubusercontent.com/<patches-source>/<branch>/patches-list.json
 ```
 
-Dry run mode:
+`<branch>` is selected automatically based on the resolved patch release:
 
+- `dev` if the selected patch release is a prerelease
+- `main` if the selected patch release is stable
+
+This applies to:
+
+- `patches-version = dev`
+- `patches-version = all`
+- exact tags (example: `4.0.0-dev.3`)
+
+If `patches-list` is explicitly set to a GitHub blob URL, it is converted to raw automatically and branch logic is skipped.
+
+---
+
+## version
+
+Controls base APK version.
+
+If not set, defaults to `auto`.
+
+`auto`:
+
+1. Reads patches-list  
+2. Finds compatible versions for package-name  
+3. Reads app-source releases  
+4. Picks highest common version  
+
+Manual override:
+
+```toml
+version = "19.05.36"
 ```
-python main.py --dry-run
-```
+
+If manually set, auto logic is skipped.
+
+---
+
 
 ---
 
