@@ -128,24 +128,6 @@ else:
 if not DRY:
     mkdir_clean("temp", "tools", "patches", "build")
 
-CLI_VERSION, _ = resolve(global_cli, global_cli_mode)
-
-cli_rel = gh(f"https://api.github.com/repos/{global_cli}/releases/tags/v{CLI_VERSION}")
-
-CLI_URL = None
-for a in cli_rel.get("assets", []):
-    n = a["name"].lower()
-    if n.startswith("morphe-cli") and n.endswith("-all.jar"):
-        CLI_URL = a["browser_download_url"]
-        break
-
-if not CLI_URL:
-    die(f"morphe-cli all.jar not found for v{CLI_VERSION}")
-
-if not DRY:
-    if download_with_retry(CLI_URL, "tools/morphe-cli.jar") != 0:
-        die("CLI download failed")
-
 apkeditor = ""
 for r in gh("https://api.github.com/repos/REAndroid/APKEditor/releases"):
     if not r["prerelease"]:
@@ -162,6 +144,8 @@ if apkeditor and not DRY:
 built = []
 used_patch_versions = {}
 release_brand = global_brand
+cli_cache = {}
+cli_version_cache = {}
 
 for table, app in apps.items():
 
@@ -176,6 +160,38 @@ for table, app in apps.items():
     PATCH_VERSION, IS_PRE = resolve(src, mode)
 
     used_patch_versions[src] = PATCH_VERSION
+
+    cli_src = app.get("cli-source") or global_cli
+    cli_mode = app.get("cli-version") or global_cli_mode
+
+    version_key = f"{cli_src}@{cli_mode}"
+
+    if version_key not in cli_version_cache:
+        cli_version_cache[version_key] = resolve(cli_src, cli_mode)
+
+    CLI_VERSION, _ = cli_version_cache[version_key]
+
+    cli_key = f"{cli_src}@{CLI_VERSION}"
+
+    if cli_key not in cli_cache:
+
+        cli_rel = gh(f"https://api.github.com/repos/{cli_src}/releases/tags/v{CLI_VERSION}")
+
+        CLI_URL = None
+        for a in cli_rel.get("assets", []):
+            n = a["name"].lower()
+            if n.startswith("morphe-cli") and n.endswith("-all.jar"):
+                CLI_URL = a["browser_download_url"]
+                break
+
+        if not CLI_URL:
+            die(f"morphe-cli all.jar not found for v{CLI_VERSION}")
+
+        if not DRY:
+            if download_with_retry(CLI_URL, "tools/morphe-cli.jar") != 0:
+                die("CLI download failed")
+
+        cli_cache[cli_key] = True
 
     patch_file = f"patches/{src.split('/')[-1]}-{PATCH_VERSION}.mpp"
     PATCH_URL = f"https://github.com/{src}/releases/download/v{PATCH_VERSION}/patches-{PATCH_VERSION}.mpp"
@@ -273,7 +289,7 @@ for table, app in apps.items():
         out
     ] + shlex.split(app.get("patcher-args", "")))
 
-    built.append((table, final, APP, variant))
+    built.append((name, final, APP, variant))
 
 if DRY:
     print("[✓] Dry run complete")
