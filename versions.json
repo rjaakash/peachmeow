@@ -8,7 +8,7 @@
     "cli": ""
   },
   "wchill/rvx-morphed": {
-    "version": "",
-    "cli": ""
+    "version": "5.16.2",
+    "cli": "1.4.0"
   }
 }
