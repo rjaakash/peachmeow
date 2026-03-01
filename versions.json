@@ -4,8 +4,8 @@
     "cli": ""
   },
   "anddea/revanced-patches": {
-    "version": "",
-    "cli": ""
+    "version": "4.0.0-dev.5",
+    "cli": "1.4.0"
   },
   "wchill/rvx-morphed": {
     "version": "5.16.2",
