@@ -7,7 +7,6 @@ import shlex
 import subprocess
 from pathlib import Path
 from packaging.version import Version
-from datetime import datetime
 from utils import *
 
 CONFIG_FILE = "config.toml"
@@ -38,83 +37,79 @@ def gh(url):
         die(f"GitHub API failed: {url}")
     return r.json()
 
-def cleanup_old_releases(active_brands, keep_tag):
+def cleanup_old_releases(active_brands):
+
     r = subprocess.run(
         [
-            "gh","release","list",
-            "--limit","200",
-            "--json","tagName,isPrerelease,createdAt",
-            "-q",".[] | [.tagName, .isPrerelease, .createdAt] | @tsv"
+            "gh", "release", "list",
+            "--limit", "200",
+            "--json", "tagName,isPrerelease,isDraft",
+            "-q", ".[] | @json"
         ],
         capture_output=True,
         text=True,
         check=True
     )
 
-    rows = []
-    for line in r.stdout.splitlines():
-        parts = line.split("\t")
-        if len(parts) != 3:
-            continue
-        tag, is_pre, created_at = parts
-        if "-v" not in tag:
-            continue
-        rows.append((tag, is_pre == "true", created_at))
-
-    if not rows:
-        return
-
+    releases = [json.loads(line) for line in r.stdout.splitlines() if line.strip()]
     parsed = []
-    for tag, is_pre, created_at in rows:
+
+    for rel in releases:
+        tag = rel.get("tagName")
+        if not tag or "-v" not in tag:
+            continue
+
         brand = tag.split("-v", 1)[0]
         version = tag.split("-v", 1)[1]
+
         try:
             vobj = Version(version)
-            dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-            parsed.append((tag, brand, vobj, dt, is_pre))
         except:
             continue
 
-    parsed_by_version = sorted(parsed, key=lambda x: x[2], reverse=True)
+        is_prerelease = rel.get("isPrerelease", False)
+        is_draft = rel.get("isDraft", False)
 
-    brands = {}
-    for tag, brand, version, dt, is_pre in parsed_by_version:
-        brands.setdefault(brand, []).append((tag, version, dt, is_pre))
+        parsed.append((tag, brand, vobj, is_prerelease, is_draft))
 
-    for brand in list(brands.keys()):
-        if brand not in active_brands:
-            for tag, _, _, _ in brands[brand]:
-                subprocess.run(["gh", "release", "delete", tag, "-y"], check=False)
-                subprocess.run(["git", "push", "origin", f":refs/tags/{tag}"], check=False)
-            del brands[brand]
+    by_brand = {}
+    for tag, brand, version, is_pre, is_draft in parsed:
+        if not is_draft:
+            by_brand.setdefault(brand, []).append((tag, version, is_pre))
 
-    brand_count = len(brands)
     keep = set()
 
-    for brand, items in brands.items():
-        stable = [x for x in items if not x[3]]
-        dev = [x for x in items if x[3]]
+    for brand, items in by_brand.items():
+        if brand not in active_brands:
+            continue
+
+        stable = [x for x in items if not x[2]]
+        prerelease = [x for x in items if x[2]]
+
         if stable:
-            keep.add(stable[0][0])
-        if dev:
-            keep.add(dev[0][0])
+            keep.add(max(stable, key=lambda x: x[1])[0])
 
-    if brand_count <= 5:
-        target = 10
-        parsed_by_date = sorted(parsed, key=lambda x: x[3], reverse=True)
-        for tag, brand, version, dt, is_pre in parsed_by_date:
-            if len(keep) >= target:
-                break
-            if brand in brands and tag not in keep:
-                keep.add(tag)
+        if prerelease:
+            keep.add(max(prerelease, key=lambda x: x[1])[0])
 
-    for tag, brand, version, dt, is_pre in parsed:
-        if brand not in brands:
+    for tag, brand, version, is_pre, is_draft in parsed:
+        if tag not in keep:
+            subprocess.run(["gh", "release", "delete", tag, "-y"], check=False)
+            subprocess.run(["git", "push", "origin", f":refs/tags/{tag}"], check=False)
+
+    r = subprocess.run(
+        ["git", "tag"],
+        capture_output=True,
+        text=True,
+        check=True
+    )
+
+    for tag in r.stdout.splitlines():
+        if "-v" not in tag:
             continue
-        if tag in keep:
-            continue
-        subprocess.run(["gh", "release", "delete", tag, "-y"], check=False)
-        subprocess.run(["git", "push", "origin", f":refs/tags/{tag}"], check=False)
+        brand = tag.split("-v", 1)[0]
+        if brand not in active_brands or tag not in keep:
+            subprocess.run(["git", "push", "origin", f":refs/tags/{tag}"], check=False)
 
 cfg = tomllib.loads(Path(CONFIG_FILE).read_text())
 
@@ -437,6 +432,6 @@ subprocess.run(["git","pull","--rebase"],check=True)
 subprocess.run(["git","push"],check=True)
 
 active_brands = {a.get("morphe-brand") or global_brand for a in apps.values() if a.get("enabled", True)}
-cleanup_old_releases(active_brands, tag)
+cleanup_old_releases(active_brands)
 
 print("[✓] Release complete")
