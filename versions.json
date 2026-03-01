@@ -1,0 +1,14 @@
+{
+  "MorpheApp/morphe-patches": {
+    "version": "",
+    "cli": ""
+  },
+  "anddea/revanced-patches": {
+    "version": "",
+    "cli": ""
+  },
+  "wchill/rvx-morphed": {
+    "version": "",
+    "cli": ""
+  }
+}

@@ -1,0 +1,113 @@
+[YouTube]
+package-name = "com.google.android.youtube"
+app-source = "rjaakash/peachmeow-store"
+patches-version = "all"
+cli-version = "all"
+
+[Music]
+package-name = "com.google.android.apps.youtube.music"
+app-source = "rjaakash/peachmeow-store"
+patches-version = "all"
+cli-version = "all"
+
+["YouTube Experimental"]
+app-name = "YouTube"
+package-name = "com.google.android.youtube"
+app-source = "rjaakash/peachmeow-store"
+patches-version = "all"
+cli-version = "all"
+version = "21.08.261"
+patcher-args = "-f"
+variant = "Experimental"
+
+["Music Experimental"]
+app-name = "Music"
+package-name = "com.google.android.apps.youtube.music"
+app-source = "rjaakash/peachmeow-store"
+patches-version = "all"
+cli-version = "all"
+version = "9.03.52"
+patcher-args = "-f"
+variant = "Experimental"
+
+[Reddit]
+package-name = "com.reddit.frontpage"
+app-source = "rjaakash/peachmeow-store"
+patches-version = "all"
+cli-version = "all"
+
+["YouTube Anddea AFN Blue"]
+app-name = "YouTube"
+package-name = "com.google.android.youtube"
+app-source = "rjaakash/peachmeow-store"
+patches-source = "anddea/revanced-patches"
+patches-version = "all"
+morphe-brand = "Anddea"
+variant = "AFN-Blue"
+patcher-args = "-e 'Custom header for YouTube' -e 'MaterialYou' -e 'Theme' -e 'Custom Shorts action buttons' -OiconType=outline -e 'Custom branding icon for YouTube' -OappIcon=afn_blue -OrestoreOldSplashAnimation=true -e 'Overlay buttons' -OiconType=thin -e 'Settings for YouTube' -OrvxSettingsLabel=Anddea -e 'Visual preferences icons for YouTube' -OsettingsMenuIcon=rvx_letters_bold -OapplyToAll=false"
+
+["Music Anddea AFN Blue"]
+app-name = "Music"
+package-name = "com.google.android.apps.youtube.music"
+app-source = "rjaakash/peachmeow-store"
+patches-source = "anddea/revanced-patches"
+patches-version = "all"
+morphe-brand = "Anddea"
+variant = "AFN-Blue"
+patcher-args = "-e 'Custom header for YouTube Music' -e 'Custom branding icon for YouTube Music' -OappIcon=afn_blue -OrestoreOldSplashIcon=true -e 'Settings for YouTube Music' -OrvxSettingsLabel=Anddea -e 'Visual preferences icons for YouTube Music' -OsettingsMenuIcon=rvx_letters_bold -OapplyToAll=false"
+
+["YouTube Anddea Revancify Red"]
+app-name = "YouTube"
+package-name = "com.google.android.youtube"
+app-source = "rjaakash/peachmeow-store"
+patches-source = "anddea/revanced-patches"
+patches-version = "all"
+morphe-brand = "Anddea"
+variant = "Revancify-Red"
+patcher-args = "-e 'Custom branding name for YouTube' -e 'Custom header for YouTube' -e 'Hide shortcuts' -e 'MaterialYou' -e 'Theme' -e 'Custom branding icon for YouTube' -OappIcon=revancify_red -OrestoreOldSplashAnimation=true -e 'Overlay buttons' -OiconType=rounded -e 'Settings for YouTube' -OrvxSettingsLabel=Anddea -e 'Visual preferences icons for YouTube' -OsettingsMenuIcon=rvx_letters_bold -OapplyToAll=false"
+
+["Music Anddea Revancify Red"]
+app-name = "Music"
+package-name = "com.google.android.apps.youtube.music"
+app-source = "rjaakash/peachmeow-store"
+patches-source = "anddea/revanced-patches"
+patches-version = "all"
+morphe-brand = "Anddea"
+variant = "Revancify-Red"
+patcher-args = "-e 'Custom header for YouTube Music' -e 'Custom branding icon for YouTube Music' -OappIcon=revancify_red -OrestoreOldSplashIcon=true -e 'Custom branding name for YouTube Music' -OappNameNotification=Music -OappNameLauncher=Music -e 'Settings for YouTube Music' -OrvxSettingsLabel=Anddea -e 'Visual preferences icons for YouTube Music' -OsettingsMenuIcon=rvx_letters_bold -OapplyToAll=false"
+
+["YouTube RVX Morphed AFN Blue"]
+app-name = "YouTube"
+package-name = "com.google.android.youtube"
+app-source = "rjaakash/peachmeow-store"
+patches-source = "wchill/rvx-morphed"
+morphe-brand = "RVX-Morphed"
+variant = "AFN-Blue"
+patcher-args = "-e 'Custom header for YouTube' -e 'MaterialYou' -d 'Custom branding name for YouTube' -e 'Custom Shorts action buttons' -OiconType=outline -e 'Custom branding icon for YouTube' -OappIcon=afn_blue -OrestoreOldSplashAnimation=true -e 'Overlay buttons' -OiconType=thin"
+
+["Music RVX Morphed AFN Blue"]
+app-name = "Music"
+package-name = "com.google.android.apps.youtube.music"
+app-source = "rjaakash/peachmeow-store"
+patches-source = "wchill/rvx-morphed"
+morphe-brand = "RVX-Morphed"
+variant = "AFN-Blue"
+patcher-args = "-e 'Custom header for YouTube Music' -d 'Custom branding name for YouTube Music' -e 'Custom branding icon for YouTube Music' -OappIcon=afn_blue -OrestoreOldSplashIcon=true"
+
+["YouTube RVX Morphed Revancify Red"]
+app-name = "YouTube"
+package-name = "com.google.android.youtube"
+app-source = "rjaakash/peachmeow-store"
+patches-source = "wchill/rvx-morphed"
+morphe-brand = "RVX-Morphed"
+variant = "Revancify-Red"
+patcher-args = "-e 'Custom header for YouTube' -e 'MaterialYou' -e 'Custom branding icon for YouTube' -OappIcon=revancify_red -OrestoreOldSplashAnimation=true"
+
+["Music RVX Morphed Revancify Red"]
+app-name = "Music"
+package-name = "com.google.android.apps.youtube.music"
+app-source = "rjaakash/peachmeow-store"
+patches-source = "wchill/rvx-morphed"
+morphe-brand = "RVX-Morphed"
+variant = "Revancify-Red"
+patcher-args = "-e 'Custom header for YouTube Music' -e 'Custom branding icon for YouTube Music' -OappIcon=revancify_red -OrestoreOldSplashIcon=true -e 'Custom branding name for YouTube Music' -OappNameNotification=Music -OappNameLauncher=Music"
