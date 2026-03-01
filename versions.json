@@ -1,6 +1,6 @@
 {
   "MorpheApp/morphe-patches": {
-    "version": "1.16.0-dev.3",
+    "version": "1.16.0-dev.5",
     "cli": "1.5.0-dev.7"
   },
   "anddea/revanced-patches": {
