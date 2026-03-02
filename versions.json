@@ -10,5 +10,9 @@
   "wchill/rvx-morphed": {
     "version": "5.16.2",
     "cli": "1.4.0"
+  },
+  "hoo-dles/morphe-patches": {
+    "version": "1.10.1",
+    "cli": "1.4.0"
   }
 }
