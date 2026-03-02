@@ -261,11 +261,20 @@ for table, app in apps.items():
 
         rel = gh(f"https://api.github.com/repos/{repo}/releases?per_page=100")
 
-        avail = [
-            x["tag_name"].replace(f"{name}-", "")
-            for x in rel
-            if x["tag_name"].startswith(f"{name}-")
-        ]
+        avail = []
+
+        for x in rel:
+            tag = x["tag_name"]
+
+            if tag.startswith(f"{name}-"):
+                avail.append(tag.replace(f"{name}-", ""))
+                continue
+
+            try:
+                Version(tag)
+                avail.append(tag)
+            except:
+                continue
 
         cand = sorted(avail if wildcard else set(compat) & set(avail), key=Version)
 
@@ -295,8 +304,25 @@ for table, app in apps.items():
     if DRY:
         continue
 
-    APK = f"https://github.com/{repo}/releases/download/{name}-{APP}/{name}-{APP}.apk"
-    APKM = f"https://github.com/{repo}/releases/download/{name}-{APP}/{name}-{APP}.apkm"
+    tag = f"{name}-{APP}"
+
+    try:
+        rel = gh(f"https://api.github.com/repos/{repo}/releases/tags/{tag}")
+    except:
+        tag = APP
+        rel = gh(f"https://api.github.com/repos/{repo}/releases/tags/{tag}")
+
+    APK = None
+    APKM = None
+
+    for a in rel.get("assets", []):
+        if a["name"].endswith(".apk"):
+            APK = a["browser_download_url"]
+        if a["name"].endswith(".apkm"):
+            APKM = a["browser_download_url"]
+
+    if not APK and not APKM:
+        die(table)
 
     out = f"temp/{name}.apk"
 
