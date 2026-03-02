@@ -326,11 +326,20 @@ for table, app in apps.items():
 
     out = f"temp/{name}.apk"
 
-    if download_with_retry(APK, out) != 0:
-        if download_with_retry(APKM, f"temp/{name}.apkm") == 0:
-            run(["java","-jar","tools/apkeditor.jar","m","-f","-i",f"temp/{name}.apkm","-o",out])
-        else:
+    if APK:
+        if download_with_retry(APK, out) != 0:
             die(table)
+    else:
+        apkm_path = f"temp/{name}.apkm"
+        if download_with_retry(APKM, apkm_path) != 0:
+            die(table)
+
+        run([
+            "java","-jar","tools/apkeditor.jar",
+            "m","-f",
+            "-i", apkm_path,
+            "-o", out
+        ])
 
     ensure_apk(out)
 
