@@ -11,6 +11,7 @@ patches-version = "all"
 cli-version = "all"
 
 ["YouTube Experimental"]
+enabled = false
 app-name = "YouTube"
 package-name = "com.google.android.youtube"
 app-source = "rjaakash/peachmeow-store"
@@ -21,6 +22,7 @@ patcher-args = "-f"
 variant = "Experimental"
 
 ["Music Experimental"]
+enabled = false
 app-name = "Music"
 package-name = "com.google.android.apps.youtube.music"
 app-source = "rjaakash/peachmeow-store"
@@ -111,3 +113,10 @@ patches-source = "wchill/rvx-morphed"
 morphe-brand = "RVX-Morphed"
 variant = "Revancify-Red"
 patcher-args = "-e 'Custom header for YouTube Music' -e 'Custom branding icon for YouTube Music' -OappIcon=revancify_red -OrestoreOldSplashIcon=true -e 'Custom branding name for YouTube Music' -OappNameNotification=Music -OappNameLauncher=Music"
+
+["Proton VPN"]
+app-name = "ProtonVPN"
+package-name = "ch.protonvpn.android"
+app-source = "ProtonVPN/android-app"
+patches-source = "hoo-dles/morphe-patches"
+morphe-brand = "hoo-dles"
