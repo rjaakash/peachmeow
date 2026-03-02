@@ -48,7 +48,13 @@ def resolve(repo, mode):
             if not x["prerelease"]:
                 return x["tag_name"].lstrip("v")
 
-    if mode in ("dev", "all"):
+    if mode == "dev":
+        for x in rel:
+            if x["prerelease"]:
+                return x["tag_name"].lstrip("v")
+        return None
+
+    if mode == "all":
         return rel[0]["tag_name"].lstrip("v")
 
     return mode
