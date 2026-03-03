@@ -37,13 +37,13 @@ def gh(url):
         die(f"GitHub API failed: {url}")
     return r.json()
 
-def cleanup_old_releases(active_brands):
+def cleanup_old_releases(active_brands, brand_modes):
 
     r = subprocess.run(
         [
             "gh", "release", "list",
             "--limit", "200",
-            "--json", "tagName,isPrerelease,isDraft",
+            "--json", "id,tagName,isPrerelease,isDraft",
             "-q", ".[] | @json"
         ],
         capture_output=True,
@@ -55,7 +55,22 @@ def cleanup_old_releases(active_brands):
     parsed = []
 
     for rel in releases:
+        rid = rel.get("id")
         tag = rel.get("tagName")
+        is_prerelease = rel.get("isPrerelease", False)
+        is_draft = rel.get("isDraft", False)
+
+        if is_draft:
+            if tag:
+                subprocess.run(["gh", "release", "delete", tag, "-y"], check=False)
+                subprocess.run(["git", "push", "origin", f":refs/tags/{tag}"], check=False)
+            else:
+                subprocess.run(
+                    ["gh", "api", "-X", "DELETE", f"repos/{OWNER}/releases/{rid}"],
+                    check=False
+                )
+            continue
+
         if not tag or "-v" not in tag:
             continue
 
@@ -67,33 +82,46 @@ def cleanup_old_releases(active_brands):
         except:
             continue
 
-        is_prerelease = rel.get("isPrerelease", False)
-        is_draft = rel.get("isDraft", False)
-
-        parsed.append((tag, brand, vobj, is_prerelease, is_draft))
+        parsed.append((tag, brand, vobj, is_prerelease))
 
     by_brand = {}
-    for tag, brand, version, is_pre, is_draft in parsed:
-        if not is_draft:
-            by_brand.setdefault(brand, []).append((tag, version, is_pre))
+    for tag, brand, version, is_pre in parsed:
+        by_brand.setdefault(brand, []).append((tag, version, is_pre))
 
     keep = set()
 
     for brand, items in by_brand.items():
+
         if brand not in active_brands:
             continue
+
+        mode = brand_modes.get(brand, "all")
 
         stable = [x for x in items if not x[2]]
         prerelease = [x for x in items if x[2]]
 
-        if stable:
-            keep.add(max(stable, key=lambda x: x[1])[0])
+        if mode == "all":
+            if stable:
+                keep.add(max(stable, key=lambda x: x[1])[0])
+            if prerelease:
+                keep.add(max(prerelease, key=lambda x: x[1])[0])
 
-        if prerelease:
-            keep.add(max(prerelease, key=lambda x: x[1])[0])
+        elif mode == "dev":
+            if prerelease:
+                keep.add(max(prerelease, key=lambda x: x[1])[0])
 
-    for tag, brand, version, is_pre, is_draft in parsed:
-        if tag not in keep:
+        elif mode == "latest":
+            if stable:
+                keep.add(max(stable, key=lambda x: x[1])[0])
+
+        else:
+            target = mode.lstrip("v")
+            for tag, version, _ in items:
+                if str(version) == target:
+                    keep.add(tag)
+
+    for tag, brand, version, is_pre in parsed:
+        if brand not in active_brands or tag not in keep:
             subprocess.run(["gh", "release", "delete", tag, "-y"], check=False)
             subprocess.run(["git", "push", "origin", f":refs/tags/{tag}"], check=False)
 
@@ -106,8 +134,11 @@ def cleanup_old_releases(active_brands):
 
     for tag in r.stdout.splitlines():
         if "-v" not in tag:
+            subprocess.run(["git", "push", "origin", f":refs/tags/{tag}"], check=False)
             continue
+
         brand = tag.split("-v", 1)[0]
+
         if brand not in active_brands or tag not in keep:
             subprocess.run(["git", "push", "origin", f":refs/tags/{tag}"], check=False)
 
@@ -466,7 +497,18 @@ subprocess.run(["git","commit","-m",msg],check=True)
 subprocess.run(["git","pull","--rebase"],check=True)
 subprocess.run(["git","push"],check=True)
 
-active_brands = {a.get("morphe-brand") or global_brand for a in apps.values() if a.get("enabled", True)}
-cleanup_old_releases(active_brands)
+brand_modes = {}
+
+for app in apps.values():
+    brand = app.get("morphe-brand") or global_brand
+    mode = app.get("patches-version") or global_patch_mode
+    brand_modes[brand] = mode
+
+active_brands = {
+    a.get("morphe-brand") or global_brand
+    for a in apps.values()
+}
+
+cleanup_old_releases(active_brands, brand_modes)
 
 print("[✓] Release complete")
