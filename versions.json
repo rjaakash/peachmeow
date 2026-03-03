@@ -3,12 +3,12 @@
     "version": "1.16.0-dev.9",
     "cli": "1.5.0-dev.8"
   },
-  "anddea/revanced-patches": {
-    "version": "4.0.0-dev.5",
-    "cli": "1.4.0"
-  },
   "wchill/rvx-morphed": {
     "version": "5.16.2",
+    "cli": "1.4.0"
+  },
+  "anddea/revanced-patches": {
+    "version": "4.0.0-dev.5",
     "cli": "1.4.0"
   },
   "hoo-dles/morphe-patches": {
