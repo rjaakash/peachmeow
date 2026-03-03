@@ -114,9 +114,10 @@ morphe-brand = "RVX-Morphed"
 variant = "Revancify-Red"
 patcher-args = "-e 'Custom header for YouTube Music' -e 'Custom branding icon for YouTube Music' -OappIcon=revancify_red -OrestoreOldSplashIcon=true -e 'Custom branding name for YouTube Music' -OappNameNotification=Music -OappNameLauncher=Music"
 
-["Proton VPN"]
+["Proton VPN hoodles"]
 app-name = "ProtonVPN"
 package-name = "ch.protonvpn.android"
 app-source = "ProtonVPN/android-app"
 patches-source = "hoo-dles/morphe-patches"
-morphe-brand = "hoo-dles"
+morphe-brand = "hoodles"
+version = "5.16.31.0"
