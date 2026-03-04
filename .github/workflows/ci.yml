@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 22 * * *"
+    - cron: "30 10 * * *"
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  resolver:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: sudo apt-get update && sudo apt-get install -y python3 gh
+
+      - env:
+          PEACHMEOW_GITHUB_PAT: ${{ secrets.PEACHMEOW_GITHUB_PAT }}
+          GH_TOKEN: ${{ secrets.PEACHMEOW_GITHUB_PAT }}
+        run: |
+          set -e
+
+          python3 resolver.py
+
+          RUNS=$(gh run list --limit 200 --json databaseId -q '.[].databaseId')
+
+          COUNT=0
+          for ID in $RUNS; do
+            COUNT=$((COUNT+1))
+            if [ $COUNT -gt 10 ]; then
+              gh run delete "$ID"
+            fi
+          done
