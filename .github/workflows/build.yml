@@ -1,0 +1,49 @@
+name: Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install system tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y file gh python3 python3-pip
+          pip3 install packaging
+
+      - name: Restore keystore
+        run: |
+          echo "${{ secrets.SIGNING_KEYSTORE_B64 }}" | base64 -d > morphe-release.bks
+
+      - name: Authenticate gh
+        run: echo "${{ secrets.PEACHMEOW_GITHUB_PAT }}" | gh auth login --with-token
+
+      - name: Run builder
+        env:
+          SIGNING_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          PEACHMEOW_GITHUB_PAT: ${{ secrets.PEACHMEOW_GITHUB_PAT }}
+        run: |
+          if [ -z "${{ github.event.inputs.source }}" ]; then
+            python3 main.py
+          else
+            python3 main.py --source "${{ github.event.inputs.source }}"
+          fi
