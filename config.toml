@@ -1,3 +1,5 @@
+patcher-args = "--striplibs=arm64-v8a"
+
 [YouTube]
 package-name = "com.google.android.youtube"
 app-source = "rjaakash/peachmeow-store"

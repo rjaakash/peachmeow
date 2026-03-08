@@ -132,6 +132,11 @@ global_cli = cfg.get("cli-source") or "MorpheApp/morphe-cli"
 global_brand = cfg.get("morphe-brand") or "Morphe"
 global_patch_mode = cfg.get("patches-version") or "latest"
 global_cli_mode = cfg.get("cli-version") or "latest"
+global_striplibs = ""
+for t in shlex.split(cfg.get("patcher-args", "")):
+    if t.startswith("--striplibs="):
+        global_striplibs = t
+        break
 
 apps = {k: v for k, v in cfg.items() if isinstance(v, dict)}
 
@@ -357,6 +362,13 @@ for table, app in apps.items():
 
     ensure_apk(out)
 
+    app_args = shlex.split(app.get("patcher-args", ""))
+    strip_override = next((t for t in app_args if t.startswith("--striplibs=")), None)
+
+    args_final = ([strip_override] if strip_override else ([global_striplibs] if global_striplibs else [])) + [
+        t for t in app_args if not t.startswith("--striplibs=")
+    ]
+
     run([
         "java","-jar","tools/morphe-cli.jar","patch",
         "--keystore","morphe-release.bks",
@@ -367,7 +379,7 @@ for table, app in apps.items():
         "-o",f"build/{final}",
         "--purge",
         out
-    ] + shlex.split(app.get("patcher-args", "")))
+    ] + args_final)
 
     built.append((name, final, APP, variant))
 
