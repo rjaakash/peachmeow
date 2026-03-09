@@ -1,6 +1,6 @@
 {
   "MorpheApp/morphe-patches": {
-    "version": "1.18.0-dev.2",
+    "version": "1.18.0-dev.3",
     "cli": "1.5.0"
   },
   "wchill/rvx-morphed": {
