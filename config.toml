@@ -5,6 +5,7 @@ package-name = "com.google.android.youtube"
 app-source = "rjaakash/peachmeow-store"
 patches-version = "all"
 cli-version = "all"
+patcher-args = "-e 'Hide Shorts components' -OhideShortsAppShortcut=true -OhideShortsWidget=true"
 
 [Music]
 package-name = "com.google.android.apps.youtube.music"
