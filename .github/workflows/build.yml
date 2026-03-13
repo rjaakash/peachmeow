@@ -6,6 +6,9 @@ on:
       source:
         required: false
         default: ""
+      mode:
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -45,5 +48,9 @@ jobs:
           if [ -z "${{ github.event.inputs.source }}" ]; then
             python3 main.py
           else
-            python3 main.py --source "${{ github.event.inputs.source }}"
+            if [ -z "${{ github.event.inputs.mode }}" ]; then
+              python3 main.py --source "${{ github.event.inputs.source }}"
+            else
+              python3 main.py --source "${{ github.event.inputs.source }}" --mode "${{ github.event.inputs.mode }}"
+            fi
           fi
