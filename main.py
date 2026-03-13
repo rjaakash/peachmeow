@@ -14,10 +14,12 @@ VERSIONS_FILE = "versions.json"
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--source")
+ap.add_argument("--mode")
 ap.add_argument("--dry-run", action="store_true")
 args = ap.parse_args()
 
 BUILD_SOURCE = args.source
+BUILD_MODE = args.mode
 DRY = args.dry_run
 
 SIGNING_KEYSTORE_PASSWORD = require_env("SIGNING_KEYSTORE_PASSWORD")
@@ -30,6 +32,9 @@ if not OWNER:
     die("GITHUB_REPOSITORY missing")
 
 HEAD = {"Authorization": f"token {PEACHMEOW_GITHUB_PAT}"}
+
+STATE_BRANCH = "state"
+INIT_MSG = "state: initial 🐱 PeachMeow metadata"
 
 def gh(url):
     r = requests.get(url, headers=HEAD, timeout=60)
@@ -206,13 +211,13 @@ for table, app in apps.items():
     if src not in targets:
         continue
 
-    mode = app.get("patches-version") or global_patch_mode
+    mode = ("latest" if BUILD_MODE == "stable" else BUILD_MODE) or (app.get("patches-version") or global_patch_mode)
     PATCH_VERSION, IS_PRE = resolve(src, mode)
 
     used_patch_versions[src] = PATCH_VERSION
 
     cli_src = app.get("cli-source") or global_cli
-    cli_mode = app.get("cli-version") or global_cli_mode
+    cli_mode = ("latest" if BUILD_MODE == "stable" else BUILD_MODE) or (app.get("cli-version") or global_cli_mode)
 
     version_key = f"{cli_src}@{cli_mode}"
 
@@ -474,6 +479,34 @@ if is_prerelease:
 
 subprocess.run(cmd, check=True)
 
+subprocess.run(["git","fetch","origin",STATE_BRANCH],check=False)
+
+remote_check = subprocess.run(
+    ["git","ls-remote","--heads","origin",STATE_BRANCH],
+    capture_output=True,
+    text=True
+)
+
+if remote_check.stdout.strip() == "":
+    subprocess.run(["git","checkout","--orphan",STATE_BRANCH],check=True)
+    subprocess.run(["git","rm","-rf","."],check=False)
+    subprocess.run(["git","clean","-fd"],check=False)
+
+    if not Path(VERSIONS_FILE).exists():
+        Path(VERSIONS_FILE).write_text("{}\n")
+
+    subprocess.run(["git","config","user.name","github-actions[bot]"],check=True)
+    subprocess.run(["git","config","user.email","41898282+github-actions[bot]@users.noreply.github.com"],check=True)
+
+    subprocess.run(["git","add",VERSIONS_FILE],check=True)
+    subprocess.run(["git","commit","-m",INIT_MSG],check=True)
+
+    subprocess.run(["git","push","-u","origin",STATE_BRANCH],check=True)
+    subprocess.run(["git","fetch","origin",STATE_BRANCH],check=False)
+
+if remote_check.stdout.strip() != "":
+    subprocess.run(["git","checkout","-B",STATE_BRANCH,f"origin/{STATE_BRANCH}"],check=True)
+
 versions = {}
 if Path(VERSIONS_FILE).exists():
     versions = json.loads(Path(VERSIONS_FILE).read_text())
@@ -489,13 +522,31 @@ Path(VERSIONS_FILE).write_text(json.dumps(versions, indent=2))
 
 subprocess.run(["git","config","user.name","github-actions[bot]"],check=True)
 subprocess.run(["git","config","user.email","41898282+github-actions[bot]@users.noreply.github.com"],check=True)
+
 subprocess.run(["git","add",VERSIONS_FILE],check=True)
 
 msg = f"release: {patch_src} → {patch_ver}"
 
-subprocess.run(["git","commit","-m",msg],check=True)
-subprocess.run(["git","pull","--rebase"],check=True)
-subprocess.run(["git","push"],check=True)
+r = subprocess.run(["git","diff","--cached","--quiet"])
+if r.returncode != 0:
+    subprocess.run(["git","commit","-m",msg],check=True)
+
+for _ in range(5):
+    r = subprocess.run(["git","pull","--rebase","origin",STATE_BRANCH])
+
+    if r.returncode != 0:
+        subprocess.run(["git","rebase","--abort"], check=False)
+        subprocess.run(["git","reset","--hard","origin/"+STATE_BRANCH])
+        subprocess.run(["git","add",VERSIONS_FILE], check=True)
+
+        r = subprocess.run(["git","diff","--cached","--quiet"])
+        if r.returncode != 0:
+            subprocess.run(["git","commit","-m",msg], check=True)
+
+    push = subprocess.run(["git","push","origin",STATE_BRANCH])
+
+    if push.returncode == 0:
+        break
 
 active_brands = {a.get("morphe-brand") or global_brand for a in apps.values()}
 cleanup_old_releases(active_brands, current_tag=tag)
