@@ -1,1 +1,34 @@
-{}
+{
+  "MorpheApp/morphe-patches": {
+    "latest": {
+      "patch": "1.18.0",
+      "cli": "1.5.0"
+    },
+    "dev": {
+      "patch": "1.19.0-dev.3",
+      "cli": "1.5.1-dev.3"
+    }
+  },
+  "anddea/revanced-patches": {
+    "latest": {
+      "patch": "3.16.0",
+      "cli": ""
+    },
+    "dev": {
+      "patch": "4.0.0-dev.7",
+      "cli": "1.5.0"
+    }
+  },
+  "RookieEnough/De-ReVanced": {
+    "latest": {
+      "patch": "1.0.1",
+      "cli": "1.5.0"
+    }
+  },
+  "hoo-dles/morphe-patches": {
+    "latest": {
+      "patch": "1.13.0",
+      "cli": "1.5.0"
+    }
+  }
+}
