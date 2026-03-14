@@ -19,14 +19,45 @@ app-source = "rjaakash/peachmeow-store"
 patches-version = "all"
 cli-version = "all"
 
-["Proton VPN hoo-dles"]
-app-name = "ProtonVPN"
-package-name = "ch.protonvpn.android"
-app-source = "ProtonVPN/android-app"
-patches-source = "hoo-dles/morphe-patches"
-morphe-brand = "hoo-dles"
-version = "5.16.88.0"
-patcher-args = "-f"
+["YouTube Anddea Revancify Blue"]
+app-name = "YouTube"
+package-name = "com.google.android.youtube"
+app-source = "rjaakash/peachmeow-store"
+patches-source = "anddea/revanced-patches"
+patches-version = "all"
+morphe-brand = "Anddea"
+variant = "Revancify-Blue"
+patcher-args = "-e 'Custom branding name for YouTube' -e 'Custom header for YouTube' -e 'Hide shortcuts' -e 'Theme' -e 'Custom branding icon for YouTube' -OappIcon=revancify_blue -OrestoreOldSplashAnimation=true -e 'Overlay buttons' -OiconType=rounded -e 'Settings for YouTube' -OrvxSettingsLabel=Anddea -e 'Visual preferences icons for YouTube' -OsettingsMenuIcon=rvx_letters_bold -OapplyToAll=false"
+
+["Music Anddea Revancify Blue"]
+app-name = "Music"
+package-name = "com.google.android.apps.youtube.music"
+app-source = "rjaakash/peachmeow-store"
+patches-source = "anddea/revanced-patches"
+patches-version = "all"
+morphe-brand = "Anddea"
+variant = "Revancify-Blue"
+patcher-args = "-e 'Custom header for YouTube Music' -e 'Custom branding icon for YouTube Music' -OappIcon=revancify_blue -OrestoreOldSplashIcon=true -e 'Custom branding name for YouTube Music' -OappNameNotification=Music -OappNameLauncher=Music -e 'Settings for YouTube Music' -OrvxSettingsLabel=Anddea -e 'Visual preferences icons for YouTube Music' -OsettingsMenuIcon=rvx_letters_bold -OapplyToAll=false"
+
+["YouTube Anddea AFN Blue"]
+app-name = "YouTube"
+package-name = "com.google.android.youtube"
+app-source = "rjaakash/peachmeow-store"
+patches-source = "anddea/revanced-patches"
+patches-version = "all"
+morphe-brand = "Anddea"
+variant = "AFN-Blue"
+patcher-args = "-e 'Custom header for YouTube' -e 'MaterialYou' -e 'Theme' -e 'Custom Shorts action buttons' -OiconType=outline -e 'Custom branding icon for YouTube' -OappIcon=afn_blue -OrestoreOldSplashAnimation=true -e 'Overlay buttons' -OiconType=thin -e 'Settings for YouTube' -OrvxSettingsLabel=Anddea -e 'Visual preferences icons for YouTube' -OsettingsMenuIcon=rvx_letters_bold -OapplyToAll=false"
+
+["Music Anddea AFN Blue"]
+app-name = "Music"
+package-name = "com.google.android.apps.youtube.music"
+app-source = "rjaakash/peachmeow-store"
+patches-source = "anddea/revanced-patches"
+patches-version = "all"
+morphe-brand = "Anddea"
+variant = "AFN-Blue"
+patcher-args = "-e 'Custom header for YouTube Music' -e 'Custom branding icon for YouTube Music' -OappIcon=afn_blue -OrestoreOldSplashIcon=true -e 'Settings for YouTube Music' -OrvxSettingsLabel=Anddea -e 'Visual preferences icons for YouTube Music' -OsettingsMenuIcon=rvx_letters_bold -OapplyToAll=false"
 
 ["Photos De-ReVanced"]
 app-name = "Photos"
@@ -36,3 +67,12 @@ patches-source = "RookieEnough/De-ReVanced"
 morphe-brand = "De-ReVanced"
 version = "7.67.0.882706237"
 patcher-args = "-e 'Enable DCIM folders backup control'"
+
+["Proton VPN hoo-dles"]
+app-name = "ProtonVPN"
+package-name = "ch.protonvpn.android"
+app-source = "ProtonVPN/android-app"
+patches-source = "hoo-dles/morphe-patches"
+morphe-brand = "hoo-dles"
+version = "5.16.88.0"
+patcher-args = "-f"
