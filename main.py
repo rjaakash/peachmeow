@@ -472,6 +472,17 @@ Path("release.md").write_text("\n".join(lines))
 tag = f"{release_brand}-v{patch_ver}"
 release_name = f"{release_brand.replace('-', ' ')} 🐱 PeachMeow v{patch_ver}"
 
+check = subprocess.run(
+    ["gh","release","view",tag],
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL
+)
+
+if check.returncode == 0:
+    subprocess.run(["gh","release","delete",tag,"-y"],check=False)
+    subprocess.run(["git","push","origin",f":refs/tags/{tag}"],check=False)
+    subprocess.run(["git","tag","-d",tag],check=False,stderr=subprocess.DEVNULL)
+
 cmd = ["gh","release","create",tag,"-t",release_name,"-F","release.md"] + [f"build/{x}" for _, x,_,_ in built]
 
 if is_prerelease:
