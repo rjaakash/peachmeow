@@ -26,6 +26,7 @@ app-source = "ProtonVPN/android-app"
 patches-source = "hoo-dles/morphe-patches"
 morphe-brand = "hoo-dles"
 version = "5.16.88.0"
+patcher-args = "-f"
 
 ["Photos De-ReVanced"]
 app-name = "Photos"
