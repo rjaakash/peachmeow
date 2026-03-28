@@ -36,24 +36,31 @@ HEAD = {"Authorization": f"token {PEACHMEOW_GITHUB_PAT}"}
 STATE_BRANCH = "state"
 INIT_MSG = "state: initial 🐱 PeachMeow metadata"
 
+
 def gh(url):
     r = requests.get(url, headers=HEAD, timeout=60)
     if r.status_code != 200:
         die(f"GitHub API failed: {url}")
     return r.json()
 
+
 def cleanup_old_releases(active_brands, current_tag=None):
 
     r = subprocess.run(
         [
-            "gh", "release", "list",
-            "--limit", "200",
-            "--json", "tagName,isPrerelease",
-            "-q", ".[] | @json"
+            "gh",
+            "release",
+            "list",
+            "--limit",
+            "200",
+            "--json",
+            "tagName,isPrerelease",
+            "-q",
+            ".[] | @json",
         ],
         capture_output=True,
         text=True,
-        check=True
+        check=True,
     )
 
     releases = [json.loads(line) for line in r.stdout.splitlines() if line.strip()]
@@ -130,6 +137,7 @@ def cleanup_old_releases(active_brands, current_tag=None):
             subprocess.run(["gh", "release", "delete", tag, "-y"], check=False)
             subprocess.run(["git", "push", "origin", f":refs/tags/{tag}"], check=False)
 
+
 cfg = tomllib.loads(Path(CONFIG_FILE).read_text())
 
 global_patches = cfg.get("patches-source") or "MorpheApp/morphe-patches"
@@ -150,6 +158,7 @@ for app in apps.values():
     src = app.get("patches-source") or global_patches
     if src not in source_order:
         source_order.append(src)
+
 
 def resolve(repo, mode):
     rel = gh(f"https://api.github.com/repos/{repo}/releases")
@@ -176,6 +185,7 @@ def resolve(repo, mode):
             return tag, r["prerelease"]
 
     return tag, False
+
 
 if BUILD_SOURCE:
     targets = {BUILD_SOURCE}
@@ -217,13 +227,21 @@ for table, app in apps.items():
     if src not in targets:
         continue
 
-    mode = ("latest" if BUILD_MODE == "stable" else "dev" if BUILD_MODE == "pre-release" else BUILD_MODE) or (app.get("patches-version") or global_patch_mode)
+    mode = (
+        "latest"
+        if BUILD_MODE == "stable"
+        else "dev" if BUILD_MODE == "pre-release" else BUILD_MODE
+    ) or (app.get("patches-version") or global_patch_mode)
     PATCH_VERSION, IS_PRE = resolve(src, mode)
 
     used_patch_versions[src] = PATCH_VERSION
 
     cli_src = app.get("cli-source") or global_cli
-    cli_mode = ("latest" if BUILD_MODE == "stable" else "dev" if BUILD_MODE == "pre-release" else BUILD_MODE) or (app.get("cli-version") or global_cli_mode)
+    cli_mode = (
+        "latest"
+        if BUILD_MODE == "stable"
+        else "dev" if BUILD_MODE == "pre-release" else BUILD_MODE
+    ) or (app.get("cli-version") or global_cli_mode)
 
     version_key = f"{cli_src}@{cli_mode}"
 
@@ -236,7 +254,9 @@ for table, app in apps.items():
 
     if cli_key not in cli_cache:
 
-        cli_rel = gh(f"https://api.github.com/repos/{cli_src}/releases/tags/v{CLI_VERSION}")
+        cli_rel = gh(
+            f"https://api.github.com/repos/{cli_src}/releases/tags/v{CLI_VERSION}"
+        )
 
         CLI_URL = None
         for a in cli_rel.get("assets", []):
@@ -364,33 +384,54 @@ for table, app in apps.items():
         if download_with_retry(APKM, apkm_path) != 0:
             die(table)
 
-        run([
-            "java","-jar","tools/apkeditor.jar",
-            "m","-f",
-            "-i", apkm_path,
-            "-o", out
-        ])
+        run(
+            [
+                "java",
+                "-jar",
+                "tools/apkeditor.jar",
+                "m",
+                "-f",
+                "-i",
+                apkm_path,
+                "-o",
+                out,
+            ]
+        )
 
     ensure_apk(out)
 
     app_args = shlex.split(app.get("patcher-args", ""))
     strip_override = next((t for t in app_args if t.startswith("--striplibs=")), None)
 
-    args_final = ([strip_override] if strip_override else ([global_striplibs] if global_striplibs else [])) + [
-        t for t in app_args if not t.startswith("--striplibs=")
-    ]
+    args_final = (
+        [strip_override]
+        if strip_override
+        else ([global_striplibs] if global_striplibs else [])
+    ) + [t for t in app_args if not t.startswith("--striplibs=")]
 
-    run([
-        "java","-jar","tools/morphe-cli.jar","patch",
-        "--keystore",require_env("SIGNING_KEYSTORE_FILE"),
-        "--keystore-password",SIGNING_KEYSTORE_PASSWORD,
-        "--keystore-entry-alias",SIGNING_KEY_ALIAS,
-        "--keystore-entry-password",SIGNING_KEY_PASSWORD,
-        "-p",patch_file,
-        "-o",f"build/{final}",
-        "--purge",
-        out
-    ] + args_final)
+    run(
+        [
+            "java",
+            "-jar",
+            "tools/morphe-cli.jar",
+            "patch",
+            "--keystore",
+            require_env("SIGNING_KEYSTORE_FILE"),
+            "--keystore-password",
+            SIGNING_KEYSTORE_PASSWORD,
+            "--keystore-entry-alias",
+            SIGNING_KEY_ALIAS,
+            "--keystore-entry-password",
+            SIGNING_KEY_PASSWORD,
+            "-p",
+            patch_file,
+            "-o",
+            f"build/{final}",
+            "--purge",
+            out,
+        ]
+        + args_final
+    )
 
     built.append((name, final, APP, variant))
 
@@ -421,10 +462,12 @@ has_variants = any(
 
 priority = ["youtube", "music"]
 
+
 def app_sort_key(app):
     if app.lower() in priority:
         return (0, priority.index(app.lower()))
     return (1, app.lower())
+
 
 if not has_variants:
 
@@ -479,52 +522,62 @@ tag = f"{release_brand}-v{patch_ver}"
 release_name = f"{release_brand.replace('-', ' ')} 🐱 PeachMeow v{patch_ver}"
 
 check = subprocess.run(
-    ["gh","release","view",tag],
-    stdout=subprocess.DEVNULL,
-    stderr=subprocess.DEVNULL
+    ["gh", "release", "view", tag], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
 )
 
 if check.returncode == 0:
-    subprocess.run(["gh","release","delete",tag,"-y"],check=False)
-    subprocess.run(["git","push","origin",f":refs/tags/{tag}"],check=False)
-    subprocess.run(["git","tag","-d",tag],check=False,stderr=subprocess.DEVNULL)
+    subprocess.run(["gh", "release", "delete", tag, "-y"], check=False)
+    subprocess.run(["git", "push", "origin", f":refs/tags/{tag}"], check=False)
+    subprocess.run(["git", "tag", "-d", tag], check=False, stderr=subprocess.DEVNULL)
 
-cmd = ["gh","release","create",tag,"-t",release_name,"-F","release.md"] + [f"build/{x}" for _, x,_,_ in built]
+cmd = ["gh", "release", "create", tag, "-t", release_name, "-F", "release.md"] + [
+    f"build/{x}" for _, x, _, _ in built
+]
 
 if is_prerelease:
     cmd.append("--prerelease")
 
 subprocess.run(cmd, check=True)
 
-subprocess.run(["git","fetch","origin",STATE_BRANCH],check=False)
+subprocess.run(["git", "fetch", "origin", STATE_BRANCH], check=False)
 
 remote_check = subprocess.run(
-    ["git","ls-remote","--heads","origin",STATE_BRANCH],
+    ["git", "ls-remote", "--heads", "origin", STATE_BRANCH],
     capture_output=True,
-    text=True
+    text=True,
 )
 
 if remote_check.stdout.strip() == "":
-    subprocess.run(["git","checkout","--orphan",STATE_BRANCH],check=True)
-    subprocess.run(["git","rm","-rf","."],check=False)
-    subprocess.run(["git","clean","-fd"],check=False)
+    subprocess.run(["git", "checkout", "--orphan", STATE_BRANCH], check=True)
+    subprocess.run(["git", "rm", "-rf", "."], check=False)
+    subprocess.run(["git", "clean", "-fd"], check=False)
 
     if not Path(VERSIONS_FILE).exists():
         Path(VERSIONS_FILE).write_text("{}\n")
 
-    subprocess.run(["git","config","user.name","github-actions[bot]"],check=True)
-    subprocess.run(["git","config","user.email","41898282+github-actions[bot]@users.noreply.github.com"],check=True)
+    subprocess.run(["git", "config", "user.name", "github-actions[bot]"], check=True)
+    subprocess.run(
+        [
+            "git",
+            "config",
+            "user.email",
+            "41898282+github-actions[bot]@users.noreply.github.com",
+        ],
+        check=True,
+    )
 
-    subprocess.run(["git","add",VERSIONS_FILE],check=True)
-    subprocess.run(["git","commit","-m",INIT_MSG],check=True)
+    subprocess.run(["git", "add", VERSIONS_FILE], check=True)
+    subprocess.run(["git", "commit", "-m", INIT_MSG], check=True)
 
-    subprocess.run(["git","push","-u","origin",STATE_BRANCH],check=True)
-    subprocess.run(["git","fetch","origin",STATE_BRANCH],check=False)
+    subprocess.run(["git", "push", "-u", "origin", STATE_BRANCH], check=True)
+    subprocess.run(["git", "fetch", "origin", STATE_BRANCH], check=False)
 
 if remote_check.stdout.strip() != "":
-    subprocess.run(["git","reset","--hard"], check=True)
-    subprocess.run(["git","clean","-fd"], check=True)
-    subprocess.run(["git","checkout","-B",STATE_BRANCH,f"origin/{STATE_BRANCH}"],check=True)
+    subprocess.run(["git", "reset", "--hard"], check=True)
+    subprocess.run(["git", "clean", "-fd"], check=True)
+    subprocess.run(
+        ["git", "checkout", "-B", STATE_BRANCH, f"origin/{STATE_BRANCH}"], check=True
+    )
 
 versions = {}
 if Path(VERSIONS_FILE).exists():
@@ -549,30 +602,38 @@ for src in versions:
 
 Path(VERSIONS_FILE).write_text(json.dumps(ordered_versions, indent=2))
 
-subprocess.run(["git","config","user.name","github-actions[bot]"],check=True)
-subprocess.run(["git","config","user.email","41898282+github-actions[bot]@users.noreply.github.com"],check=True)
+subprocess.run(["git", "config", "user.name", "github-actions[bot]"], check=True)
+subprocess.run(
+    [
+        "git",
+        "config",
+        "user.email",
+        "41898282+github-actions[bot]@users.noreply.github.com",
+    ],
+    check=True,
+)
 
-subprocess.run(["git","add",VERSIONS_FILE],check=True)
+subprocess.run(["git", "add", VERSIONS_FILE], check=True)
 
 msg = f"release: {patch_src} → {patch_ver}"
 
-r = subprocess.run(["git","diff","--cached","--quiet"])
+r = subprocess.run(["git", "diff", "--cached", "--quiet"])
 if r.returncode != 0:
-    subprocess.run(["git","commit","-m",msg],check=True)
+    subprocess.run(["git", "commit", "-m", msg], check=True)
 
 for _ in range(5):
-    r = subprocess.run(["git","pull","--rebase","origin",STATE_BRANCH])
+    r = subprocess.run(["git", "pull", "--rebase", "origin", STATE_BRANCH])
 
     if r.returncode != 0:
-        subprocess.run(["git","rebase","--abort"], check=False)
-        subprocess.run(["git","reset","--hard","origin/"+STATE_BRANCH])
-        subprocess.run(["git","add",VERSIONS_FILE], check=True)
+        subprocess.run(["git", "rebase", "--abort"], check=False)
+        subprocess.run(["git", "reset", "--hard", "origin/" + STATE_BRANCH])
+        subprocess.run(["git", "add", VERSIONS_FILE], check=True)
 
-        r = subprocess.run(["git","diff","--cached","--quiet"])
+        r = subprocess.run(["git", "diff", "--cached", "--quiet"])
         if r.returncode != 0:
-            subprocess.run(["git","commit","-m",msg], check=True)
+            subprocess.run(["git", "commit", "-m", msg], check=True)
 
-    push = subprocess.run(["git","push","origin",STATE_BRANCH])
+    push = subprocess.run(["git", "push", "origin", STATE_BRANCH])
 
     if push.returncode == 0:
         break

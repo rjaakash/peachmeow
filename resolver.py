@@ -15,15 +15,18 @@ HEADERS = {}
 if PEACHMEOW_GITHUB_PAT:
     HEADERS["Authorization"] = f"token {PEACHMEOW_GITHUB_PAT}"
 
+
 def die(m):
     print(m, flush=True)
     raise SystemExit(1)
+
 
 def load_config():
     if not Path(CONFIG_FILE).exists():
         die("config.toml missing")
     with open(CONFIG_FILE, "rb") as f:
         return tomllib.load(f)
+
 
 def load_versions():
     if not Path(VERSIONS_FILE).exists():
@@ -35,11 +38,10 @@ def load_versions():
 
     return json.loads(txt)
 
+
 def resolve(repo, mode):
     r = requests.get(
-        f"https://api.github.com/repos/{repo}/releases",
-        headers=HEADERS,
-        timeout=60
+        f"https://api.github.com/repos/{repo}/releases", headers=HEADERS, timeout=60
     )
     if r.status_code != 200:
         die(f"Failed to fetch {repo}")
@@ -65,11 +67,10 @@ def resolve(repo, mode):
 
     return mode
 
+
 def resolve_channels(repo):
     r = requests.get(
-        f"https://api.github.com/repos/{repo}/releases",
-        headers=HEADERS,
-        timeout=60
+        f"https://api.github.com/repos/{repo}/releases", headers=HEADERS, timeout=60
     )
     if r.status_code != 200:
         die(f"Failed to fetch {repo}")
@@ -91,6 +92,7 @@ def resolve_channels(repo):
 
     return latest, dev
 
+
 def trigger(src, mode=None):
     print(f"[+] Trigger build: {src}")
     cmd = ["gh", "workflow", "run", "build.yml", "-f", f"source={src}"]
@@ -98,17 +100,18 @@ def trigger(src, mode=None):
         cmd += ["-f", f"mode={mode}"]
     subprocess.run(cmd, check=True)
 
+
 def main():
     print("[+] Resolver started")
 
     cfg = load_config()
 
-    subprocess.run(["git","fetch","origin","state"], check=False)
+    subprocess.run(["git", "fetch", "origin", "state"], check=False)
 
     remote_check = subprocess.run(
-        ["git","ls-remote","--heads","origin","state"],
+        ["git", "ls-remote", "--heads", "origin", "state"],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     state_exists = remote_check.stdout.strip() != ""
@@ -117,7 +120,7 @@ def main():
         old = {}
         versions_file_existed = False
     else:
-        subprocess.run(["git","checkout","-B","state","origin/state"], check=True)
+        subprocess.run(["git", "checkout", "-B", "state", "origin/state"], check=True)
 
         versions_file_existed = Path(VERSIONS_FILE).exists()
         old = load_versions()
@@ -144,7 +147,7 @@ def main():
     channel_dirty = False
     removed_sources = []
     removed_channels = []
-    
+
     for k in list(old.keys()):
         if k not in active:
             print("[-] Removing stale source from versions.json:", k)
@@ -155,17 +158,27 @@ def main():
     if source_dirty and state_exists and versions_file_existed:
         Path(VERSIONS_FILE).write_text(json.dumps(old, indent=2))
 
-        subprocess.run(["git","config","user.name","github-actions[bot]"], check=True)
-        subprocess.run(["git","config","user.email","41898282+github-actions[bot]@users.noreply.github.com"], check=True)
-        subprocess.run(["git","add",VERSIONS_FILE], check=True)
+        subprocess.run(
+            ["git", "config", "user.name", "github-actions[bot]"], check=True
+        )
+        subprocess.run(
+            [
+                "git",
+                "config",
+                "user.email",
+                "41898282+github-actions[bot]@users.noreply.github.com",
+            ],
+            check=True,
+        )
+        subprocess.run(["git", "add", VERSIONS_FILE], check=True)
 
         if len(removed_sources) == 1:
             msg = f"delete: stale patch source → {removed_sources[0]}"
         else:
             msg = "delete: stale patch sources → " + ", ".join(removed_sources)
 
-        subprocess.run(["git","commit","-m", msg], check=False)
-        subprocess.run(["git","push"], check=True)
+        subprocess.run(["git", "commit", "-m", msg], check=False)
+        subprocess.run(["git", "push"], check=True)
 
     changed = []
 
@@ -218,7 +231,9 @@ def main():
         print("  stored latest   :", stored_latest)
         print("  stored dev      :", stored_dev)
 
-        stable_changed = latest_stable and (stored_latest is None or Version(latest_stable) > Version(stored_latest))
+        stable_changed = latest_stable and (
+            stored_latest is None or Version(latest_stable) > Version(stored_latest)
+        )
 
         if stable_changed:
             changed.append(("stable", src))
@@ -252,19 +267,30 @@ def main():
     if channel_dirty and removed_channels and state_exists and versions_file_existed:
         Path(VERSIONS_FILE).write_text(json.dumps(old, indent=2))
 
-        subprocess.run(["git","config","user.name","github-actions[bot]"], check=True)
-        subprocess.run(["git","config","user.email","41898282+github-actions[bot]@users.noreply.github.com"], check=True)
-        subprocess.run(["git","add",VERSIONS_FILE], check=True)
+        subprocess.run(
+            ["git", "config", "user.name", "github-actions[bot]"], check=True
+        )
+        subprocess.run(
+            [
+                "git",
+                "config",
+                "user.email",
+                "41898282+github-actions[bot]@users.noreply.github.com",
+            ],
+            check=True,
+        )
+        subprocess.run(["git", "add", VERSIONS_FILE], check=True)
 
         if len(removed_channels) == 1:
             msg = f"delete: unused version channel → {removed_channels[0]}"
         else:
             msg = "delete: unused version channels → " + ", ".join(removed_channels)
 
-        subprocess.run(["git","commit","-m", msg], check=False)
-        subprocess.run(["git","push"], check=True)
+        subprocess.run(["git", "commit", "-m", msg], check=False)
+        subprocess.run(["git", "push"], check=True)
 
     print("[✓] Resolver done")
+
 
 if __name__ == "__main__":
     main()
