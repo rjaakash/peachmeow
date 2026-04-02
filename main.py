@@ -214,6 +214,7 @@ if apkeditor and not DRY:
 
 built = []
 used_patch_versions = {}
+used_cli_versions = {}
 release_brand = global_brand
 cli_cache = {}
 cli_version_cache = {}
@@ -249,6 +250,7 @@ for table, app in apps.items():
         cli_version_cache[version_key] = resolve(cli_src, cli_mode)
 
     CLI_VERSION, _ = cli_version_cache[version_key]
+    used_cli_versions[src] = CLI_VERSION
 
     cli_key = f"{cli_src}@{CLI_VERSION}"
 
@@ -518,8 +520,58 @@ lines.append(changelog)
 
 Path("release.md").write_text("\n".join(lines))
 
-tag = f"{release_brand}-v{patch_ver}"
-release_name = f"{release_brand.replace('-', ' ')} 🐱 PeachMeow v{patch_ver}"
+r = subprocess.run(
+    [
+        "gh",
+        "release",
+        "list",
+        "--limit",
+        "200",
+        "--json",
+        "tagName",
+        "-q",
+        ".[].tagName",
+    ],
+    capture_output=True,
+    text=True,
+    check=True,
+)
+
+max_n = 0
+
+for line in r.stdout.splitlines():
+    t = line.strip()
+    if t.startswith("peachmeow-r"):
+        try:
+            n = int(t.split("peachmeow-r")[1])
+            if n > max_n:
+                max_n = n
+        except:
+            pass
+
+release_number = max_n + 1
+tag = f"peachmeow-r{release_number}"
+
+unique_sources = set(used_patch_versions.keys())
+unique_patch_versions = set(used_patch_versions.values())
+
+brands_used = set()
+for table, app in apps.items():
+    if app.get("enabled", True):
+        src = app.get("patches-source") or global_patches
+        if src in used_patch_versions:
+            brands_used.add(app.get("morphe-brand") or global_brand)
+
+single_clean_build = (
+    len(unique_sources) == 1
+    and len(unique_patch_versions) == 1
+    and len(brands_used) == 1
+)
+
+if single_clean_build:
+    release_name = f"{release_brand.replace('-', ' ')} 🐱 PeachMeow v{patch_ver}"
+else:
+    release_name = f"🐱 PeachMeow - Release {release_number}"
 
 check = subprocess.run(
     ["gh", "release", "view", tag], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
@@ -583,12 +635,16 @@ versions = {}
 if Path(VERSIONS_FILE).exists():
     versions = json.loads(Path(VERSIONS_FILE).read_text())
 
-entry = versions.setdefault(patch_src, {})
+for src, patch_ver in used_patch_versions.items():
 
-if is_prerelease:
-    entry["dev"] = {"patch": patch_ver, "cli": CLI_VERSION}
-else:
-    entry["latest"] = {"patch": patch_ver, "cli": CLI_VERSION}
+    entry = versions.setdefault(src, {})
+
+    cli_ver = used_cli_versions.get(src)
+
+    if is_prerelease:
+        entry["dev"] = {"patch": patch_ver, "cli": cli_ver}
+    else:
+        entry["latest"] = {"patch": patch_ver, "cli": cli_ver}
 
 ordered_versions = {}
 
