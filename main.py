@@ -237,7 +237,7 @@ for table, app in apps.items():
     ) or (app.get("patches-version") or global_patch_mode)
     PATCH_VERSION, IS_PRE = resolve(src, mode)
 
-    used_patch_versions[src] = PATCH_VERSION
+    used_patch_versions[src] = (PATCH_VERSION, IS_PRE)
 
     cli_src = app.get("cli-source") or global_cli
     cli_mode = (
@@ -446,12 +446,11 @@ if DRY:
 if not built:
     die("Nothing built")
 
-patch_src = list(used_patch_versions.keys())[0]
-patch_ver = list(used_patch_versions.values())[0]
+patch_src, (patch_ver, is_prerelease) = next(iter(used_patch_versions.items()))
 
 rel = gh(f"https://api.github.com/repos/{patch_src}/releases/tags/v{patch_ver}")
 changelog = rel.get("body") or ""
-is_prerelease = rel.get("prerelease", False)
+is_prerelease = rel.get("prerelease", is_prerelease)
 
 lines = []
 
@@ -589,13 +588,13 @@ versions = {}
 if Path(VERSIONS_FILE).exists():
     versions = json.loads(Path(VERSIONS_FILE).read_text())
 
-for src, patch_ver in used_patch_versions.items():
+for src, (patch_ver, is_pre) in used_patch_versions.items():
 
     entry = versions.setdefault(src, {})
 
     cli_ver = used_cli_versions.get(src)
 
-    if is_prerelease:
+    if is_pre:
         entry["dev"] = {"patch": patch_ver, "cli": cli_ver}
     else:
         entry["latest"] = {"patch": patch_ver, "cli": cli_ver}
