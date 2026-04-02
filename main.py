@@ -448,9 +448,14 @@ if not built:
 
 patch_src, (patch_ver, is_prerelease) = next(iter(used_patch_versions.items()))
 
+is_single_source = len(used_patch_versions) == 1
+is_same_patch = len(set(v[0] for v in used_patch_versions.values())) == 1
+is_simple_run = is_single_source and is_same_patch
+
 rel = gh(f"https://api.github.com/repos/{patch_src}/releases/tags/v{patch_ver}")
 changelog = rel.get("body") or ""
-is_prerelease = rel.get("prerelease", is_prerelease)
+
+is_prerelease = rel.get("prerelease", is_prerelease) if is_simple_run else False
 
 lines = []
 
@@ -634,7 +639,7 @@ subprocess.run(
 
 subprocess.run(["git", "add", VERSIONS_FILE], check=True)
 
-msg = f"release: {patch_src} → {patch_ver}"
+msg = f"release: {patch_src} → {patch_ver}" if is_simple_run else f"release: {release_name}"
 
 r = subprocess.run(["git", "diff", "--cached", "--quiet"])
 if r.returncode != 0:
