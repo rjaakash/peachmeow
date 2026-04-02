@@ -7,6 +7,8 @@ import shlex
 import subprocess
 from pathlib import Path
 from packaging.version import Version
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from utils import *
 
 CONFIG_FILE = "config.toml"
@@ -520,58 +522,10 @@ lines.append(changelog)
 
 Path("release.md").write_text("\n".join(lines))
 
-r = subprocess.run(
-    [
-        "gh",
-        "release",
-        "list",
-        "--limit",
-        "200",
-        "--json",
-        "tagName",
-        "-q",
-        ".[].tagName",
-    ],
-    capture_output=True,
-    text=True,
-    check=True,
-)
+now = datetime.now(ZoneInfo("Asia/Kolkata"))
 
-max_n = 0
-
-for line in r.stdout.splitlines():
-    t = line.strip()
-    if t.startswith("peachmeow-r"):
-        try:
-            n = int(t.split("peachmeow-r")[1])
-            if n > max_n:
-                max_n = n
-        except:
-            pass
-
-release_number = max_n + 1
-tag = f"peachmeow-r{release_number}"
-
-unique_sources = set(used_patch_versions.keys())
-unique_patch_versions = set(used_patch_versions.values())
-
-brands_used = set()
-for name, _, _, _ in built:
-    for table, app in apps.items():
-        if (app.get("app-name") or table) == name:
-            brands_used.add(app.get("morphe-brand") or global_brand)
-            break
-
-single_clean_build = (
-    len(unique_sources) == 1
-    and len(unique_patch_versions) == 1
-    and len(brands_used) == 1
-)
-
-if single_clean_build:
-    release_name = f"{release_brand.replace('-', ' ')} 🐱 PeachMeow v{patch_ver}"
-else:
-    release_name = f"🐱 PeachMeow - Release {release_number}"
+tag = "peachmeow-" + now.strftime("%Y%m%d-%H%M%S")
+release_name = "🐱 PeachMeow • " + now.strftime("%b %d, %I:%M %p").replace(" 0", " ")
 
 check = subprocess.run(
     ["gh", "release", "view", tag], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
