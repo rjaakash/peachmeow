@@ -524,8 +524,8 @@ Path("release.md").write_text("\n".join(lines))
 
 now = datetime.now(ZoneInfo("Asia/Kolkata"))
 
-tag = "peachmeow-" + now.strftime("%Y%m%d-%H%M%S")
-release_name = "🐱 PeachMeow • " + now.strftime("%b %d, %I:%M %p").replace(" 0", " ")
+tag = "peachmeow-" + now.strftime("%Y%m%d-%H%M%S-%f")
+release_name = f"🐱 PeachMeow • {now.strftime('%b')} {now.day}, {now.strftime('%I:%M %p').lstrip('0')}"
 
 check = subprocess.run(
     ["gh", "release", "view", tag], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
