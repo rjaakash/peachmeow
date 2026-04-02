@@ -599,6 +599,16 @@ for src, (patch_ver, is_pre) in used_patch_versions.items():
     else:
         entry["latest"] = {"patch": patch_ver, "cli": cli_ver}
 
+    ordered_entry = {}
+
+    if "latest" in entry:
+        ordered_entry["latest"] = entry["latest"]
+
+    if "dev" in entry:
+        ordered_entry["dev"] = entry["dev"]
+
+    versions[src] = ordered_entry
+
 ordered_versions = {}
 
 for src in source_order:
