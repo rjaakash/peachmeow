@@ -556,9 +556,11 @@ unique_sources = set(used_patch_versions.keys())
 unique_patch_versions = set(used_patch_versions.values())
 
 brands_used = set()
-for table, _, _, _ in built:
-    app = apps[table]
-    brands_used.add(app.get("morphe-brand") or global_brand)
+for name, _, _, _ in built:
+    for table, app in apps.items():
+        if (app.get("app-name") or table) == name:
+            brands_used.add(app.get("morphe-brand") or global_brand)
+            break
 
 single_clean_build = (
     len(unique_sources) == 1
