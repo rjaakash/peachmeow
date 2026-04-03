@@ -446,84 +446,117 @@ if DRY:
 if not built:
     die("Nothing built")
 
-patch_src, (patch_ver, is_prerelease) = next(iter(used_patch_versions.items()))
-
 is_single_source = len(used_patch_versions) == 1
 is_same_patch = len(set(v[0] for v in used_patch_versions.values())) == 1
-is_simple_run = is_single_source and is_same_patch
+is_same_cli = len(set(used_cli_versions.values())) == 1
+is_simple_run = is_single_source and is_same_patch and is_same_cli
 
-rel = gh(f"https://api.github.com/repos/{patch_src}/releases/tags/v{patch_ver}")
-changelog = rel.get("body") or ""
+if is_simple_run:
+    patch_src, (patch_ver, is_prerelease) = next(iter(used_patch_versions.items()))
 
-is_prerelease = rel.get("prerelease", is_prerelease) if is_simple_run else False
+    rel = gh(f"https://api.github.com/repos/{patch_src}/releases/tags/v{patch_ver}")
+    changelog = rel.get("body") or ""
+
+    is_prerelease = rel.get("prerelease", is_prerelease)
+else:
+    is_prerelease = False
+    changelog = ""
 
 lines = []
 
-grouped = {}
-for table, _, appv, variant in built:
-    grouped.setdefault(table, []).append((variant, appv))
+if is_simple_run:
 
-has_variants = any(
-    len(items) > 1 or (len(items) == 1 and items[0][0] is not None)
-    for items in grouped.values()
-)
+    grouped = {}
+    for table, _, appv, variant in built:
+        grouped.setdefault(table, []).append((variant, appv))
 
-priority = ["youtube", "music"]
+    has_variants = any(
+        len(items) > 1 or (len(items) == 1 and items[0][0] is not None)
+        for items in grouped.values()
+    )
 
+    priority = ["youtube", "music"]
 
-def app_sort_key(app):
-    if app.lower() in priority:
-        return (0, priority.index(app.lower()))
-    return (1, app.lower())
+    def app_sort_key(app):
+        if app.lower() in priority:
+            return (0, priority.index(app.lower()))
+        return (1, app.lower())
 
+    if not has_variants:
 
-if not has_variants:
+        lines.append("## App Versions\n")
 
-    lines.append("## App Versions\n")
-
-    for app in sorted(grouped.keys(), key=app_sort_key):
-        variant, appv = grouped[app][0]
-        lines.append(f"{app.replace('-', ' ')}: {appv}")
-
-    lines.append("")
-
-else:
-
-    lines.append("## App Versions\n")
-
-    for app in sorted(grouped.keys(), key=app_sort_key):
-
-        lines.append(f"### {app.replace('-', ' ')}")
-
-        items = grouped[app]
-
-        def variant_sort_key(item):
-            variant, _ = item
-            if variant is None:
-                return (0, "")
-            return (1, variant.lower())
-
-        for variant, appv in sorted(items, key=variant_sort_key):
-
-            if len(items) == 1 and variant is None:
-                lines.append(f"- {appv}")
-            else:
-                if variant is None:
-                    lines.append(f"- Base: {appv}")
-                else:
-                    label = variant.replace("-", " ")
-                    lines.append(f"- {label}: {appv}")
+        for app in sorted(grouped.keys(), key=app_sort_key):
+            variant, appv = grouped[app][0]
+            lines.append(f"{app.replace('-', ' ')}: {appv}")
 
         lines.append("")
 
-lines.append("## Build Info\n")
-lines.append(f"- Patch: {patch_ver}")
-lines.append(f"- CLI: {CLI_VERSION}")
-lines.append("")
+    else:
 
-lines.append("## Patch Changelog\n")
-lines.append(changelog)
+        lines.append("## App Versions\n")
 
+        for app in sorted(grouped.keys(), key=app_sort_key):
+
+            lines.append(f"### {app.replace('-', ' ')}")
+
+            items = grouped[app]
+
+            def variant_sort_key(item):
+                variant, _ = item
+                if variant is None:
+                    return (0, "")
+                return (1, variant.lower())
+
+            for variant, appv in sorted(items, key=variant_sort_key):
+
+                if len(items) == 1 and variant is None:
+                    lines.append(f"- {appv}")
+                else:
+                    if variant is None:
+                        lines.append(f"- Base: {appv}")
+                    else:
+                        label = variant.replace("-", " ")
+                        lines.append(f"- {label}: {appv}")
+
+            lines.append("")
+
+    lines.append("## Build Info\n")
+    lines.append(f"- Patch: {patch_ver}")
+    cli_value = next(iter(set(used_cli_versions.values())))
+    lines.append(f"- CLI: {cli_value}")
+    lines.append("")
+
+    lines.append("## Patch Changelog\n")
+    lines.append(changelog)
+
+else:
+
+    lines.append("## Patch Changelog\n")
+
+    grouped_versions = {}
+
+    for app in apps.values():
+        src = app.get("patches-source") or global_patches
+        if src in used_patch_versions:
+            ver = used_patch_versions[src][0]
+            grouped_versions.setdefault(src, []).append(ver)
+
+    for src in source_order:
+        if src not in grouped_versions:
+            continue
+
+        lines.append(src)
+
+        seen = set()
+        for v in grouped_versions[src]:
+            if v in seen:
+                continue
+            seen.add(v)
+            lines.append(v)
+
+        lines.append("")
+    
 Path("release.md").write_text("\n".join(lines))
 
 now = datetime.now(ZoneInfo("Asia/Kolkata"))
@@ -639,7 +672,10 @@ subprocess.run(
 
 subprocess.run(["git", "add", VERSIONS_FILE], check=True)
 
-msg = f"release: {patch_src} → {patch_ver}" if is_simple_run else f"release: {release_name}"
+if is_simple_run:
+    msg = f"release: {patch_src} → {patch_ver}"
+else:
+    msg = f"release: {release_name}"
 
 r = subprocess.run(["git", "diff", "--cached", "--quiet"])
 if r.returncode != 0:
