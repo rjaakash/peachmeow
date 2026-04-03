@@ -443,7 +443,7 @@ else:
     grouped_versions = {}
 
     for src in used_patch_versions:
-        grouped_versions[src] = sorted(all_patch_versions.get(src, []), key=Version)
+        grouped_versions[src] = sorted(all_patch_versions.get(src, []), key=Version, reverse=True)
 
     for src in source_order:
         if src not in grouped_versions:
@@ -451,11 +451,7 @@ else:
 
         lines.append(src)
 
-        seen = set()
         for v in grouped_versions[src]:
-            if v in seen:
-                continue
-            seen.add(v)
             lines.append(f"- [v{v}](https://github.com/{src}/releases/tag/v{v})")
 
         lines.append("")
