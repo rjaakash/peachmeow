@@ -217,7 +217,6 @@ if apkeditor and not DRY:
 built = []
 used_patch_versions = {}
 used_cli_versions = {}
-release_brand = global_brand
 cli_cache = {}
 cli_version_cache = {}
 
@@ -288,7 +287,6 @@ for table, app in apps.items():
     pkg = app.get("package-name") or die(table)
     repo = app.get("app-source") or die(table)
     brand = app.get("morphe-brand") or global_brand
-    release_brand = brand
     name = app.get("app-name") or table
     variant = app.get("variant")
     vm = app.get("version") or "auto"
