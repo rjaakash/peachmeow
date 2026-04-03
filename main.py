@@ -215,8 +215,10 @@ if apkeditor and not DRY:
 built = []
 used_patch_versions = {}
 release_brand = global_brand
-cli_cache = {}
-cli_version_cache = {}
+seen_cli = set()
+seen_patch = set()
+seen_cli_files = {}
+seen_patch_files = {}
 
 for table, app in apps.items():
 
@@ -232,8 +234,8 @@ for table, app in apps.items():
         if BUILD_MODE == "stable"
         else "dev" if BUILD_MODE == "pre-release" else BUILD_MODE
     ) or (app.get("patches-version") or global_patch_mode)
-    PATCH_VERSION, IS_PRE = resolve(src, mode)
 
+    PATCH_VERSION, IS_PRE = resolve(src, mode)
     used_patch_versions[src] = PATCH_VERSION
 
     cli_src = app.get("cli-source") or global_cli
@@ -243,43 +245,97 @@ for table, app in apps.items():
         else "dev" if BUILD_MODE == "pre-release" else BUILD_MODE
     ) or (app.get("cli-version") or global_cli_mode)
 
-    version_key = f"{cli_src}@{cli_mode}"
+    CLI_VERSION, _ = resolve(cli_src, cli_mode)
 
-    if version_key not in cli_version_cache:
-        cli_version_cache[version_key] = resolve(cli_src, cli_mode)
+    current_cli = (cli_src, CLI_VERSION)
 
-    CLI_VERSION, _ = cli_version_cache[version_key]
+    cli_owner, cli_repo = cli_src.split("/")
+    cli_dir = f"tools/{cli_owner}/{cli_repo}"
+    os.makedirs(cli_dir, exist_ok=True)
 
-    cli_key = f"{cli_src}@{CLI_VERSION}"
-
-    if cli_key not in cli_cache:
+    if current_cli not in seen_cli:
 
         cli_rel = gh(
             f"https://api.github.com/repos/{cli_src}/releases/tags/v{CLI_VERSION}"
         )
 
-        CLI_URL = None
-        for a in cli_rel.get("assets", []):
-            n = a["name"].lower()
-            if n.startswith("morphe-cli") and n.endswith("-all.jar"):
-                CLI_URL = a["browser_download_url"]
-                break
+        candidates = []
 
-        if not CLI_URL:
-            die(f"morphe-cli all.jar not found for v{CLI_VERSION}")
+        for a in cli_rel.get("assets", []):
+            n = a["name"]
+            if n.endswith(".jar"):
+                candidates.append(a)
+
+        if not candidates:
+            die(f"cli jar not found for v{CLI_VERSION}")
+
+        if len(candidates) == 1:
+            selected = candidates[0]
+        else:
+            selected = sorted(
+                candidates,
+                key=lambda x: x.get("updated_at", ""),
+            )[-1]
+
+        CLI_URL = selected["browser_download_url"]
+        CLI_FILENAME = selected["name"]
+
+        cli_file = f"{cli_dir}/{CLI_FILENAME}"
 
         if not DRY:
-            if download_with_retry(CLI_URL, "tools/morphe-cli.jar") != 0:
+            if download_with_retry(CLI_URL, cli_file) != 0:
                 die("CLI download failed")
 
-        cli_cache[cli_key] = True
+        seen_cli.add(current_cli)
+        seen_cli_files[current_cli] = CLI_FILENAME
+    else:
+        CLI_FILENAME = seen_cli_files[current_cli]
+        cli_file = f"{cli_dir}/{CLI_FILENAME}"
 
-    patch_file = f"patches/{src.split('/')[-1]}-{PATCH_VERSION}.mpp"
-    PATCH_URL = f"https://github.com/{src}/releases/download/v{PATCH_VERSION}/patches-{PATCH_VERSION}.mpp"
+    patch_owner, patch_repo = src.split("/")
+    patch_dir = f"patches/{patch_owner}/{patch_repo}"
+    os.makedirs(patch_dir, exist_ok=True)
 
-    if not DRY:
-        if download_with_retry(PATCH_URL, patch_file) != 0:
-            die("patch download failed")
+    current_patch = (src, PATCH_VERSION)
+
+    if current_patch not in seen_patch:
+
+        patch_rel = gh(
+            f"https://api.github.com/repos/{src}/releases/tags/v{PATCH_VERSION}"
+        )
+
+        candidates = []
+
+        for a in patch_rel.get("assets", []):
+            n = a["name"]
+            if n.endswith(".mpp"):
+                candidates.append(a)
+
+        if not candidates:
+            die(f"patch file not found for v{PATCH_VERSION}")
+
+        if len(candidates) == 1:
+            selected = candidates[0]
+        else:
+            selected = sorted(
+                candidates,
+                key=lambda x: x.get("updated_at", ""),
+            )[-1]
+
+        PATCH_URL = selected["browser_download_url"]
+        PATCH_FILENAME = selected["name"]
+
+        patch_file = f"{patch_dir}/{PATCH_FILENAME}"
+
+        if not DRY:
+            if download_with_retry(PATCH_URL, patch_file) != 0:
+                die("patch download failed")
+
+        seen_patch.add(current_patch)
+        seen_patch_files[current_patch] = PATCH_FILENAME
+    else:
+        PATCH_FILENAME = seen_patch_files[current_patch]
+        patch_file = f"{patch_dir}/{PATCH_FILENAME}"
 
     pkg = app.get("package-name") or die(table)
     repo = app.get("app-source") or die(table)
@@ -413,7 +469,7 @@ for table, app in apps.items():
         [
             "java",
             "-jar",
-            "tools/morphe-cli.jar",
+            cli_file,
             "patch",
             "--keystore",
             require_env("SIGNING_KEYSTORE_FILE"),
