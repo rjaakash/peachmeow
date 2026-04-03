@@ -457,7 +457,7 @@ else:
             if v in seen:
                 continue
             seen.add(v)
-            lines.append(v)
+            lines.append(f"- [v{v}](https://github.com/{src}/releases/tag/v{v})")
 
         lines.append("")
     
