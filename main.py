@@ -123,6 +123,7 @@ if apkeditor and not DRY:
 built = []
 used_patch_versions = {}
 used_cli_versions = {}
+all_patch_versions = {}
 cli_cache = {}
 cli_version_cache = {}
 
@@ -143,6 +144,7 @@ for table, app in apps.items():
     PATCH_VERSION, IS_PRE = resolve(src, mode)
 
     used_patch_versions[src] = (PATCH_VERSION, IS_PRE)
+    all_patch_versions.setdefault(src, set()).add(PATCH_VERSION)
 
     cli_src = app.get("cli-source") or global_cli
     cli_mode = (
@@ -440,11 +442,8 @@ else:
 
     grouped_versions = {}
 
-    for app in apps.values():
-        src = app.get("patches-source") or global_patches
-        if src in used_patch_versions:
-            ver = used_patch_versions[src][0]
-            grouped_versions.setdefault(src, []).append(ver)
+    for src in used_patch_versions:
+        grouped_versions[src] = sorted(all_patch_versions.get(src, []), key=Version)
 
     for src in source_order:
         if src not in grouped_versions:
