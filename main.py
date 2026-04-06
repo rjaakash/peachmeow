@@ -7,6 +7,8 @@ import shlex
 import subprocess
 from pathlib import Path
 from packaging.version import Version
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from utils import *
 
 CONFIG_FILE = "config.toml"
@@ -47,100 +49,6 @@ def gh(url):
     if r.status_code != 200:
         die(f"GitHub API failed: {url}")
     return r.json()
-
-
-def cleanup_old_releases(active_brands, current_tag=None):
-
-    r = subprocess.run(
-        [
-            "gh",
-            "release",
-            "list",
-            "--limit",
-            "200",
-            "--json",
-            "tagName,isPrerelease",
-            "-q",
-            ".[] | @json",
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-
-    releases = [json.loads(line) for line in r.stdout.splitlines() if line.strip()]
-    parsed = []
-
-    for rel in releases:
-        tag = rel.get("tagName")
-        if not tag or "-v" not in tag:
-            continue
-
-        brand = tag.split("-v", 1)[0]
-        version = tag.split("-v", 1)[1]
-
-        try:
-            vobj = Version(version)
-        except:
-            continue
-
-        is_prerelease = rel.get("isPrerelease", False)
-        parsed.append((tag, brand, vobj, is_prerelease))
-
-    by_brand = {}
-    for tag, brand, version, is_pre in parsed:
-        by_brand.setdefault(brand, []).append((tag, version, is_pre))
-
-    keep = set()
-
-    for brand, items in by_brand.items():
-
-        if brand not in active_brands:
-            continue
-
-        mode = global_patch_mode
-        for app in apps.values():
-            b = app.get("morphe-brand") or global_brand
-            if b == brand:
-                mode = app.get("patches-version") or global_patch_mode
-                break
-
-        stable = sorted([x for x in items if not x[2]], key=lambda x: x[1])
-        prerelease = sorted([x for x in items if x[2]], key=lambda x: x[1])
-
-        if mode == "dev":
-            if prerelease:
-                keep.add(prerelease[-1][0])
-
-        elif mode == "all":
-            for x in stable[-3:]:
-                keep.add(x[0])
-            if prerelease:
-                keep.add(prerelease[-1][0])
-
-        elif mode == "latest":
-            for x in stable[-3:]:
-                keep.add(x[0])
-
-        else:
-            target = mode.lstrip("v")
-            for tag, version, _ in items:
-                if str(version) == target:
-                    keep.add(tag)
-
-    if current_tag:
-        keep.add(current_tag)
-
-    for tag, brand, version, is_pre in parsed:
-
-        if brand not in active_brands:
-            subprocess.run(["gh", "release", "delete", tag, "-y"], check=False)
-            subprocess.run(["git", "push", "origin", f":refs/tags/{tag}"], check=False)
-            continue
-
-        if tag not in keep:
-            subprocess.run(["gh", "release", "delete", tag, "-y"], check=False)
-            subprocess.run(["git", "push", "origin", f":refs/tags/{tag}"], check=False)
 
 
 cfg = tomllib.loads(Path(CONFIG_FILE).read_text())
@@ -606,8 +514,11 @@ lines.append(changelog)
 
 Path("release.md").write_text("\n".join(lines))
 
-tag = f"{release_brand}-v{patch_ver}"
-release_name = f"{release_brand.replace('-', ' ')} 🐱 PeachMeow v{patch_ver}"
+now = datetime.now(ZoneInfo("Asia/Kolkata"))
+
+tag = "peachmeow-" + now.strftime("%Y%m%d-%H%M%S-%f")
+
+release_name = f"🐱 PeachMeow · {now.strftime('%Y-%m-%d')} · {now.strftime('%H:%M')}"
 
 check = subprocess.run(
     ["gh", "release", "view", tag], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
@@ -725,9 +636,6 @@ for _ in range(5):
 
     if push.returncode == 0:
         break
-
-active_brands = {a.get("morphe-brand") or global_brand for a in apps.values()}
-cleanup_old_releases(active_brands, current_tag=tag)
 
 log_plain_section("Build Complete")
 log_done("Release finished successfully")
