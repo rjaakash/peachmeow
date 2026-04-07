@@ -46,7 +46,7 @@ def log_retry(msg):
 def require_env(n):
     v = os.environ.get(n)
     if not v:
-        die(n)
+        die(f"missing env: {n}")
     return v
 
 
@@ -134,10 +134,25 @@ def download_with_retry(url, output, retries=3):
         print(f"          ← {url}", flush=True)
 
         r = subprocess.run(
-            ["curl", "-L", "--fail", "--silent", "--show-error", "-o", output, url]
+            [
+                "curl",
+                "-L",
+                "--fail",
+                "--silent",
+                "--show-error",
+                "--connect-timeout",
+                "10",
+                "--max-time",
+                "60",
+                "--retry",
+                "2",
+                "--retry-delay",
+                "1",
+                "-o",
+                output,
+                url,
+            ]
         )
-
-        time.sleep(1)
 
         p = Path(output)
 
@@ -145,8 +160,11 @@ def download_with_retry(url, output, retries=3):
             log_done(output)
             return 0
 
-        log_retry(f"{output} ({attempt+1}/{retries})")
-        time.sleep(2)
+        if p.exists():
+            p.unlink()
+
+        log_retry(f"{output} (attempt {attempt+1}/{retries})")
+        time.sleep(2**attempt)
 
     print(f"{RED}[ERROR]{RESET} Failed to download {output}", flush=True)
     return 1
@@ -156,7 +174,7 @@ def run(cmd):
     print(f"{SKY}[RUN]{RESET} {' '.join(cmd)}", flush=True)
     r = subprocess.run(cmd)
     if r.returncode != 0:
-        die("command failed: " + " ".join(cmd))
+        die(f"command failed ({r.returncode}): {' '.join(cmd)}")
 
 
 def ensure_apk(p):
