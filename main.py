@@ -110,7 +110,7 @@ else:
     }
 
 if not DRY:
-    mkdir_clean("temp", "tools", "patches", "build")
+    mkdir_clean("unpatched", "tools", "patches", "build")
 
 apkeditor = ""
 for r in gh("https://api.github.com/repos/REAndroid/APKEditor/releases"):
@@ -128,11 +128,11 @@ if apkeditor and not DRY:
 
 built = []
 used_patch_versions = {}
-release_brand = global_brand
 seen_cli = set()
 seen_patch = set()
 seen_cli_files = {}
 seen_patch_files = {}
+seen_unpatched_apps = {}
 
 for table, app in apps.items():
 
@@ -271,7 +271,6 @@ for table, app in apps.items():
     pkg = app.get("package-name") or die(table)
     repo = app.get("app-source") or die(table)
     brand = app.get("morphe-brand") or global_brand
-    release_brand = brand
     name = app.get("app-name") or table
     variant = app.get("variant")
     vm = app.get("version") or "auto"
@@ -369,31 +368,47 @@ for table, app in apps.items():
     log_kv("Package", pkg)
     log_kv("Version", APP)
 
-    out = f"temp/{name}.apk"
+    app_download_source = APK or APKM
+    app_filename = os.path.basename(app_download_source)
 
-    if APK:
-        if download_with_retry(APK, out) != 0:
-            die(table)
+    pkg_dir = f"unpatched/{pkg}"
+    os.makedirs(pkg_dir, exist_ok=True)
+
+    key = f"{pkg}/{app_filename}"
+
+    if key in seen_unpatched_apps:
+        out = seen_unpatched_apps[key]
+        log_cache(f"App reused: {pkg}/{app_filename}")
     else:
-        apkm_path = f"temp/{name}.apkm"
-        if download_with_retry(APKM, apkm_path) != 0:
+        file_path = f"{pkg_dir}/{app_filename}"
+
+        if download_with_retry(app_download_source, file_path) != 0:
             die(table)
 
-        log_sub("Merging")
+        if app_filename.endswith(".apkm"):
+            out = f"{pkg_dir}/{app_filename[:-5]}.apk"
 
-        run(
-            [
-                "java",
-                "-jar",
-                "tools/apkeditor.jar",
-                "m",
-                "-f",
-                "-i",
-                apkm_path,
-                "-o",
-                out,
-            ]
-        )
+            log_sub("Merging")
+
+            run(
+                [
+                    "java",
+                    "-jar",
+                    "tools/apkeditor.jar",
+                    "m",
+                    "-f",
+                    "-i",
+                    file_path,
+                    "-o",
+                    out,
+                ]
+            )
+
+            os.remove(file_path)
+        else:
+            out = file_path
+
+        seen_unpatched_apps[key] = out
 
     ensure_apk(out)
 
