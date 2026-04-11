@@ -14,20 +14,20 @@ patches-version = "all"
 cli-version = "all"
 
 ["Photos De-ReVanced"]
-app-name = "Photos"
 package-name = "com.google.android.apps.photos"
+app-name = "Photos"
 app-source = "rjaakash/peachmeow-store"
 patches-source = "RookieEnough/De-ReVanced"
 morphe-brand = "De-ReVanced"
 patcher-args = "-e 'Enable DCIM folders backup control'"
 
 ["Proton VPN hoo-dles"]
-app-name = "ProtonVPN"
 package-name = "ch.protonvpn.android"
+app-name = "ProtonVPN"
+app-version = "🐱"
 app-source = "ProtonVPN/android-app"
 patches-source = "hoo-dles/morphe-patches"
 morphe-brand = "hoo-dles"
-version = "🐱"
 patcher-args = "-f"
 
 [Reddit]
@@ -37,8 +37,8 @@ patches-version = "all"
 cli-version = "all"
 
 ["YouTube Anddea"]
-app-name = "YouTube"
 package-name = "com.google.android.youtube"
+app-name = "YouTube"
 app-source = "rjaakash/peachmeow-store"
 patches-source = "anddea/revanced-patches"
 patches-version = "all"
@@ -46,8 +46,8 @@ morphe-brand = "Anddea"
 patcher-args = "-e 'Custom header for YouTube' -e 'MaterialYou' -e 'Theme' -e 'Custom Shorts action buttons' -OiconType=outline -e 'Custom branding icon for YouTube' -OappIcon=afn_blue -OrestoreOldSplashAnimation=true -e 'Overlay buttons' -OiconType=thin -e 'Settings for YouTube' -OrvxSettingsLabel=Anddea -e 'Visual preferences icons for YouTube' -OsettingsMenuIcon=rvx_letters_bold -OapplyToAll=false"
 
 ["Music Anddea"]
-app-name = "Music"
 package-name = "com.google.android.apps.youtube.music"
+app-name = "Music"
 app-source = "rjaakash/peachmeow-store"
 patches-source = "anddea/revanced-patches"
 patches-version = "all"

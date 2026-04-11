@@ -16,8 +16,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - run: sudo apt-get update && sudo apt-get install -y python3 gh
-
       - run: |
           set -e
 
@@ -33,12 +31,12 @@ jobs:
 
           python3 resolver.py
 
-          RUNS=$(gh run list --limit 200 --json databaseId -q '.[].databaseId')
+          workflow_run_ids=$(gh run list --limit 200 --json databaseId -q '.[].databaseId')
 
-          COUNT=0
-          for ID in $RUNS; do
-            COUNT=$((COUNT+1))
-            if [ $COUNT -gt 10 ]; then
-              gh run delete "$ID"
+          run_count=0
+          for run_id in $workflow_run_ids; do
+            run_count=$((run_count+1))
+            if [ $run_count -gt 10 ]; then
+              gh run delete "$run_id"
             fi
           done
