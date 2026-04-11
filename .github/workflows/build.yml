@@ -85,10 +85,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          export SIGNING_KEYSTORE_PASSWORD=7777777
-          export SIGNING_KEY_ALIAS=RJ
-          export SIGNING_KEY_PASSWORD=7777777
-          export SIGNING_KEYSTORE_FILE=peachmeow-community.bks
           export PEACHMEOW_GITHUB_PAT="$GH_TOKEN"
 
           if [ -z "${{ github.event.inputs.source }}" ]; then

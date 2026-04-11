@@ -9,6 +9,7 @@ from pathlib import Path
 from packaging.version import Version
 from datetime import datetime
 from zoneinfo import ZoneInfo
+import getpass
 from utils import *
 
 CONFIG_FILE = "config.toml"
@@ -29,16 +30,23 @@ log_kv("Mode", BUILD_MODE)
 log_kv("Source", BUILD_SOURCE or "all")
 log_kv("Dry Run", DRY)
 
+PEACHMEOW_GITHUB_PAT = os.environ.get("PEACHMEOW_GITHUB_PAT")
+
+if not PEACHMEOW_GITHUB_PAT:
+    log_space()
+    PEACHMEOW_GITHUB_PAT = getpass.getpass("Enter your GitHub PAT or press Enter to skip: ").strip()
+    log_space()
+
+if PEACHMEOW_GITHUB_PAT:
+    log_done("PAT accepted")
+else:
+    log_info("No PAT entered. Running unauthenticated (may hit rate limits)")
+
 SIGNING_KEYSTORE_PASSWORD = require_env("SIGNING_KEYSTORE_PASSWORD")
 SIGNING_KEY_ALIAS = require_env("SIGNING_KEY_ALIAS")
 SIGNING_KEY_PASSWORD = require_env("SIGNING_KEY_PASSWORD")
-PEACHMEOW_GITHUB_PAT = require_env("PEACHMEOW_GITHUB_PAT")
 
-OWNER = os.environ.get("GITHUB_REPOSITORY")
-if not OWNER:
-    die("GITHUB_REPOSITORY missing")
-
-HEAD = {"Authorization": f"token {PEACHMEOW_GITHUB_PAT}"}
+HEAD = {"Authorization": f"token {PEACHMEOW_GITHUB_PAT}"} if PEACHMEOW_GITHUB_PAT else {}
 
 STATE_BRANCH = "state"
 INIT_MSG = "state: initial 🐱 PeachMeow metadata"
@@ -323,9 +331,6 @@ for table, app in apps.items():
     else:
         APP = vm
 
-    if DRY:
-        continue
-
     if vm_raw == "🐱":
         rels = gh(f"https://api.github.com/repos/{repo}/releases?per_page=100")
         rel = next((r for r in rels if not r["prerelease"]), None)
@@ -368,6 +373,10 @@ for table, app in apps.items():
 
     log_space()
     log_info(f"Output: {final}")
+
+    if DRY:
+        built.append((name, final, APP, variant))
+        continue
 
     APK = None
     APKM = None
@@ -469,7 +478,7 @@ for table, app in apps.items():
     built.append((name, final, APP, variant))
 
 if DRY:
-    log_info("Dry run complete")
+    log_done("Dry run complete")
     exit(0)
 
 if not built:

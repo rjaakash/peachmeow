@@ -45,6 +45,15 @@ def log_retry(msg):
 
 
 def require_env(n):
+    if n == "SIGNING_KEYSTORE_PASSWORD":
+        return "7777777"
+    if n == "SIGNING_KEY_ALIAS":
+        return "RJ"
+    if n == "SIGNING_KEY_PASSWORD":
+        return "7777777"
+    if n == "SIGNING_KEYSTORE_FILE":
+        return "peachmeow-community.bks"
+    
     v = os.environ.get(n)
     if not v:
         die(f"missing env: {n}")
