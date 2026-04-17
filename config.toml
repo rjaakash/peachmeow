@@ -1,17 +1,18 @@
 patcher-args = "--striplibs=arm64-v8a"
+release-cleanup = true
 
 [YouTube]
 package-name = "com.google.android.youtube"
 app-source = "rjaakash/peachmeow-store"
-patches-version = "all"
-cli-version = "all"
+patches-version = "pre-release"
+cli-version = "pre-release"
 patcher-args = "-e 'Hide Shorts components' -OhideShortsAppShortcut=true -OhideShortsWidget=true"
 
 [Music]
 package-name = "com.google.android.apps.youtube.music"
 app-source = "rjaakash/peachmeow-store"
-patches-version = "all"
-cli-version = "all"
+patches-version = "pre-release"
+cli-version = "pre-release"
 
 ["Photos De-ReVanced"]
 package-name = "com.google.android.apps.photos"
@@ -33,15 +34,13 @@ patcher-args = "-f"
 [Reddit]
 package-name = "com.reddit.frontpage"
 app-source = "rjaakash/peachmeow-store"
-patches-version = "all"
-cli-version = "all"
 
 ["YouTube Anddea"]
 package-name = "com.google.android.youtube"
 app-name = "YouTube"
 app-source = "rjaakash/peachmeow-store"
 patches-source = "anddea/revanced-patches"
-patches-version = "all"
+patches-version = "pre-release"
 morphe-brand = "Anddea"
 patcher-args = "-e 'Custom header for YouTube' -e 'MaterialYou' -e 'Theme' -e 'Custom Shorts action buttons' -OiconType=outline -e 'Custom branding icon for YouTube' -OappIcon=afn_blue -OrestoreOldSplashAnimation=true -e 'Overlay buttons' -OiconType=thin -e 'Settings for YouTube' -OrvxSettingsLabel=Anddea -e 'Visual preferences icons for YouTube' -OsettingsMenuIcon=rvx_letters_bold -OapplyToAll=false"
 
@@ -50,6 +49,6 @@ package-name = "com.google.android.apps.youtube.music"
 app-name = "Music"
 app-source = "rjaakash/peachmeow-store"
 patches-source = "anddea/revanced-patches"
-patches-version = "all"
+patches-version = "pre-release"
 morphe-brand = "Anddea"
 patcher-args = "-e 'Custom header for YouTube Music' -e 'Custom branding icon for YouTube Music' -OappIcon=afn_blue -OrestoreOldSplashIcon=true -e 'Settings for YouTube Music' -OrvxSettingsLabel=Anddea -e 'Visual preferences icons for YouTube Music' -OsettingsMenuIcon=rvx_letters_bold -OapplyToAll=false"

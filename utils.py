@@ -74,6 +74,14 @@ def log_source(source_repo):
     log_space()
 
 
+def log_source_compact(source_repo):
+    log_space()
+    print(
+        f"{PURPLE}\033[1m[SOURCE]\033[0m{RESET} → {PURPLE}\033[1;4m{source_repo}\033[0m{RESET}",
+        flush=True,
+    )
+
+
 def log_info(msg):
     print(f"{YELLOW}[INFO]{RESET} {msg}", flush=True)
 
@@ -99,39 +107,33 @@ def log_kv(key, value):
 
 
 def log_version_status(section_title, version_lines, update_status):
-    if section_title in ["latest", "dev", "all"]:
-        log_kv("Mode", section_title)
+    log_kv("Mode", section_title)
+    log_space()
+    for line_label, line_value in version_lines:
+        print(
+            f"  {line_label}: {line_value if line_value is not None else '—'}",
+            flush=True,
+        )
+    log_space()
+    log_kv("Status", update_status)
 
-    if section_title == "all":
-        stable_lines = version_lines[:2]
-        dev_lines = version_lines[2:]
 
-        log_space()
-
-        print("  \033[4mLatest\033[0m", flush=True)
-        for line_label, line_value in stable_lines:
-            print(
-                f"  {line_label.replace('Stable ', '')}: {line_value if line_value is not None else '—'}",
-                flush=True,
-            )
-
-        log_space()
-
-        print("  \033[4mDev\033[0m", flush=True)
-        for line_label, line_value in dev_lines:
-            print(
-                f"  {line_label.replace('Dev ', '')}: {line_value if line_value is not None else '—'}",
-                flush=True,
-            )
-
-    else:
-        log_space()
-        for line_label, line_value in version_lines:
-            print(
-                f"  {line_label}: {line_value if line_value is not None else '—'}",
-                flush=True,
-            )
-
+def log_version_status_channels(latest_lines, prerelease_lines, update_status):
+    log_kv("Mode", "pre-release")
+    log_space()
+    print("  \033[4mlatest\033[0m", flush=True)
+    for line_label, line_value in latest_lines:
+        print(
+            f"  {line_label}: {line_value if line_value is not None else '—'}",
+            flush=True,
+        )
+    log_space()
+    print("  \033[4mpre-release\033[0m", flush=True)
+    for line_label, line_value in prerelease_lines:
+        print(
+            f"  {line_label}: {line_value if line_value is not None else '—'}",
+            flush=True,
+        )
     log_space()
     log_kv("Status", update_status)
 
@@ -142,6 +144,10 @@ def log_cache(msg):
 
 def _is_community_build():
     return not os.environ.get("SIGNING_KEYSTORE_FILE")
+
+
+def is_ci_environment():
+    return os.environ.get("GITHUB_ACTIONS") == "true"
 
 
 def require_env(env_name):
@@ -231,6 +237,11 @@ def mkdir_clean(*dirs):
         dir_path.mkdir(parents=True, exist_ok=True)
 
 
+def mkdir_ensure(*dirs):
+    for directory in dirs:
+        Path(directory).mkdir(parents=True, exist_ok=True)
+
+
 def gh_blob_to_raw(blob_url):
     if "github.com" in blob_url and "/blob/" in blob_url:
         return blob_url.replace(
@@ -291,15 +302,7 @@ def resolve(repo, mode, headers=None, strict=False):
             die(f"No stable release found for {repo}")
         return None, False
 
-    if mode == "dev":
-        for release_entry in release_list:
-            if release_entry["prerelease"]:
-                return release_entry["tag_name"], True
-        if strict:
-            die(f"No prerelease found for {repo}")
-        return None, True
-
-    if mode == "all":
+    if mode == "pre-release":
         release_entry = release_list[0]
         return release_entry["tag_name"], release_entry["prerelease"]
 
@@ -325,18 +328,15 @@ def resolve_channels(repo, headers=None):
         die(f"Failed to fetch {repo}")
 
     release_list = api_response.json()
-    latest = None
-    dev = None
+    latest_stable = None
+    absolutely_latest = release_list[0]["tag_name"] if release_list else None
 
     for release_entry in release_list:
-        if release_entry["prerelease"]:
-            if dev is None:
-                dev = release_entry["tag_name"]
-        else:
-            if latest is None:
-                latest = release_entry["tag_name"]
+        if not release_entry["prerelease"]:
+            latest_stable = release_entry["tag_name"]
+            break
 
-    return latest, dev
+    return latest_stable, absolutely_latest
 
 
 def gh(url, headers=None):
@@ -384,12 +384,9 @@ def git_commit_versions_and_push(saved_versions, commit_message):
 
 
 def resolve_build_mode(cli_build_mode, app_entry, config_key, default_mode):
-    override = (
-        "latest"
-        if cli_build_mode == "stable"
-        else "dev" if cli_build_mode == "pre-release" else cli_build_mode
-    )
-    return override or (app_entry.get(config_key) or default_mode)
+    if cli_build_mode and cli_build_mode != "pre-release":
+        return cli_build_mode
+    return app_entry.get(config_key) or default_mode
 
 
 def build_init():
@@ -447,6 +444,21 @@ def get_apkeditor_url(auth_headers):
     return ""
 
 
+def _patches_list_disk_cache_path(patches_list_url):
+    try:
+        if "raw.githubusercontent.com" in patches_list_url:
+            stripped = patches_list_url.replace(
+                "https://raw.githubusercontent.com/", ""
+            )
+            parts = stripped.split("/")
+            return (
+                Path("patches") / parts[0] / parts[1] / f"patches-list-{parts[2]}.json"
+            )
+    except Exception:
+        pass
+    return None
+
+
 def fetch_patches_list(patches_repo, is_prerelease, app_config, patches_url_cache):
     if app_config.get("patches-list"):
         patches_list_url = gh_blob_to_raw(app_config.get("patches-list"))
@@ -458,8 +470,20 @@ def fetch_patches_list(patches_repo, is_prerelease, app_config, patches_url_cach
         log_cache(f"Patches-list: {patches_list_url}")
         return patches_url_cache[patches_list_url], patches_list_url
 
+    disk_cache_path = _patches_list_disk_cache_path(patches_list_url)
+    if disk_cache_path and disk_cache_path.exists():
+        log_cache(f"Patches-list: {patches_list_url}")
+        patches_json = json.loads(disk_cache_path.read_text())
+        patches_url_cache[patches_list_url] = patches_json
+        return patches_json, patches_list_url
+
     patches_json = requests.get(patches_list_url, timeout=60).json()
     patches_url_cache[patches_list_url] = patches_json
+
+    if disk_cache_path:
+        disk_cache_path.parent.mkdir(parents=True, exist_ok=True)
+        disk_cache_path.write_text(json.dumps(patches_json))
+
     return patches_json, patches_list_url
 
 
@@ -572,6 +596,13 @@ def download_tool(
     filename = selected_asset["name"]
     filepath = f"{download_dir}/{filename}"
 
+    disk_file = Path(filepath)
+    if disk_file.exists() and disk_file.stat().st_size > 10_000:
+        log_cache(f"{tool_label}: {filename}")
+        seen_cache.add(cache_key)
+        seen_filenames[cache_key] = filename
+        return filepath, filename
+
     log_sub(tool_label)
     log_kv(f"{tool_label} File", filename)
 
@@ -613,11 +644,21 @@ def fetch_and_merge_apk(
 
     downloaded_file = f"{package_dir}/{apk_filename}"
 
+    if apk_filename.endswith(".apkm"):
+        merged_apk_path = f"{package_dir}/{apk_filename[:-5]}.apk"
+    else:
+        merged_apk_path = downloaded_file
+
+    disk_file = Path(merged_apk_path)
+    if disk_file.exists() and disk_file.stat().st_size > 10_000:
+        log_cache(f"App: {cache_key}")
+        downloaded_apks_cache[cache_key] = merged_apk_path
+        return merged_apk_path
+
     if download_with_retry(download_url, downloaded_file) != 0:
         die(app_table_name)
 
     if apk_filename.endswith(".apkm"):
-        merged_apk_path = f"{package_dir}/{apk_filename[:-5]}.apk"
         log_sub("Merging")
         run(
             [
@@ -633,8 +674,6 @@ def fetch_and_merge_apk(
             ]
         )
         os.remove(downloaded_file)
-    else:
-        merged_apk_path = downloaded_file
 
     downloaded_apks_cache[cache_key] = merged_apk_path
     return merged_apk_path
@@ -850,7 +889,7 @@ def update_state(
     source_version_entry = stored_versions.setdefault(patches_repo, {})
 
     if is_prerelease:
-        source_version_entry["dev"] = {
+        source_version_entry["pre-release"] = {
             "patches": patches_version,
             "cli": built_cli_version,
         }
@@ -867,6 +906,16 @@ def update_state(
     for patches_src in stored_versions:
         if patches_src not in ordered_stored_versions:
             ordered_stored_versions[patches_src] = stored_versions[patches_src]
+
+    for patches_src, channels in ordered_stored_versions.items():
+        ordered_channels = {}
+        for key in ["latest", "pre-release"]:
+            if key in channels:
+                ordered_channels[key] = channels[key]
+        for key in channels:
+            if key not in ordered_channels:
+                ordered_channels[key] = channels[key]
+        ordered_stored_versions[patches_src] = ordered_channels
 
     Path(VERSIONS_FILENAME).write_text(json.dumps(ordered_stored_versions, indent=2))
 
@@ -892,24 +941,162 @@ def update_state(
             break
 
 
-def trigger(patches_repo, build_mode=None):
-    log_source(patches_repo)
+def _extract_patches_source_from_release_body(body):
+    if not body:
+        return None
+    for line in body.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("- Patches:"):
+            content = stripped[len("- Patches:") :].strip()
+            if content.startswith("[") and "](" in content:
+                return content[1 : content.index("](")]
+            return content or None
+    return None
 
-    display_build_mode = build_mode if build_mode else "None"
-    log_kv("Mode", display_build_mode)
 
-    workflow_trigger_cmd = [
-        "gh",
-        "workflow",
-        "run",
-        "build.yml",
-        "-f",
-        f"source={patches_repo}",
-    ]
-    if build_mode:
-        workflow_trigger_cmd += ["-f", f"mode={build_mode}"]
+def _extract_patches_version_from_release_body(body):
+    if not body:
+        return None
+    for line in body.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("- Patches Version:"):
+            return stripped[len("- Patches Version:") :].strip() or None
+    return None
 
-    subprocess.run(workflow_trigger_cmd, check=True)
+
+def _delete_release_and_tag(tag_name):
+    subprocess.run(
+        ["gh", "release", "delete", tag_name, "--yes"],
+        check=False,
+        stderr=subprocess.DEVNULL,
+    )
+    subprocess.run(
+        ["git", "push", "origin", f":refs/tags/{tag_name}"],
+        check=False,
+        stderr=subprocess.DEVNULL,
+    )
+    subprocess.run(
+        ["git", "tag", "-d", tag_name],
+        check=False,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def cleanup_releases(config, auth_headers):
+    if not config.get("release-cleanup", False):
+        return
+
+    repo_result = subprocess.run(
+        ["gh", "repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"],
+        capture_output=True,
+        text=True,
+    )
+    current_repo = repo_result.stdout.strip()
+    if not current_repo:
+        return
+
+    all_releases = []
+    page = 1
+    while True:
+        page_releases = gh(
+            f"https://api.github.com/repos/{current_repo}/releases?per_page=100&page={page}",
+            headers=auth_headers,
+        )
+        if not page_releases:
+            break
+        all_releases.extend(page_releases)
+        if len(page_releases) < 100:
+            break
+        page += 1
+
+    releases_by_source = {}
+    for release in all_releases:
+        source = _extract_patches_source_from_release_body(release.get("body") or "")
+        if not source:
+            continue
+        releases_by_source.setdefault(source, []).append(release)
+
+    for source, releases in releases_by_source.items():
+        stable_releases = sorted(
+            [r for r in releases if not r["prerelease"]],
+            key=lambda r: r.get("published_at") or r.get("created_at") or "",
+            reverse=True,
+        )
+        pre_releases = [r for r in releases if r["prerelease"]]
+
+        for old_release in stable_releases[3:]:
+            _delete_release_and_tag(old_release["tag_name"])
+
+        stable_patches_versions = set()
+        for r in stable_releases[:3]:
+            ver = _extract_patches_version_from_release_body(r.get("body") or "")
+            if ver:
+                stable_patches_versions.add(ensure_v(ver))
+
+        for pre_release in pre_releases:
+            pre_ver = _extract_patches_version_from_release_body(
+                pre_release.get("body") or ""
+            )
+            if not pre_ver:
+                continue
+            pre_ver_full = ensure_v(pre_ver)
+            if "-dev" in pre_ver_full:
+                base_version = pre_ver_full.split("-dev")[0]
+                if base_version in stable_patches_versions:
+                    _delete_release_and_tag(pre_release["tag_name"])
+
+
+def generate_build_matrix():
+    config = load_config()
+
+    PEACHMEOW_GITHUB_PAT = os.environ.get("PEACHMEOW_GITHUB_PAT")
+    auth_headers = {}
+    if PEACHMEOW_GITHUB_PAT:
+        auth_headers["Authorization"] = f"token {PEACHMEOW_GITHUB_PAT}"
+
+    default_patches_repo = config.get("patches-source") or "MorpheApp/morphe-patches"
+    default_patches_mode = config.get("patches-version") or "latest"
+
+    app_entries = {k: v for k, v in config.items() if isinstance(v, dict)}
+
+    repo_modes = {}
+    for app_entry in app_entries.values():
+        if app_entry.get("enabled", True) is False:
+            continue
+        patches_repo = app_entry.get("patches-source") or default_patches_repo
+        patches_mode = app_entry.get("patches-version") or default_patches_mode
+        repo_modes.setdefault(patches_repo, set()).add(patches_mode)
+
+    matrix_items = []
+    for repo, modes in repo_modes.items():
+        has_prerelease = "pre-release" in modes
+        specific_tags = {m for m in modes if m not in ("latest", "pre-release")}
+
+        if has_prerelease:
+            upstream_latest, upstream_absolutely_latest = resolve_channels(
+                repo, headers=auth_headers
+            )
+            emit_prerelease = False
+            if upstream_absolutely_latest and upstream_latest:
+                pre_base = (
+                    upstream_absolutely_latest.split("-dev", 1)[0]
+                    if "-dev" in upstream_absolutely_latest
+                    else upstream_absolutely_latest
+                )
+                if Version(pre_base) > Version(upstream_latest):
+                    emit_prerelease = True
+            elif upstream_absolutely_latest and not upstream_latest:
+                emit_prerelease = True
+            matrix_items.append({"source": repo, "mode": "latest"})
+            if emit_prerelease:
+                matrix_items.append({"source": repo, "mode": "pre-release"})
+        else:
+            matrix_items.append({"source": repo, "mode": "latest"})
+
+        for tag in sorted(specific_tags):
+            matrix_items.append({"source": repo, "mode": tag})
+
+    Path("build_matrix.json").write_text(json.dumps({"include": matrix_items}))
 
 
 def run_resolver():
@@ -955,7 +1142,7 @@ def run_resolver():
             continue
         patches_repo = app_entry.get("patches-source") or default_patches_repo
         patches_mode = app_entry.get("patches-version") or default_patches_mode
-        patch_sources[patches_repo] = patches_mode
+        patch_sources.setdefault(patches_repo, set()).add(patches_mode)
 
     active_patch_sources = set(patch_sources.keys())
 
@@ -984,136 +1171,112 @@ def run_resolver():
     sources_to_build = []
     log_sub("Check")
 
-    for patches_repo, patches_mode in patch_sources.items():
-
+    for patches_repo, modes in patch_sources.items():
         stored_source_versions = saved_versions.get(patches_repo, {})
 
-        if patches_mode == "latest":
-            if "dev" in stored_source_versions:
-                stored_source_versions.pop("dev")
-                stale_channels_removed = True
-                removed_channels.append(patches_repo)
-        elif patches_mode == "dev":
-            if "latest" in stored_source_versions:
-                stored_source_versions.pop("latest")
-                stale_channels_removed = True
-                removed_channels.append(patches_repo)
-        elif patches_mode != "all":
-            if "latest" in stored_source_versions and "dev" in stored_source_versions:
-                stored_source_versions.pop("dev")
-                stale_channels_removed = True
-                removed_channels.append(patches_repo)
+        has_prerelease_mode = "pre-release" in modes
+        specific_tags = {m for m in modes if m not in ("latest", "pre-release")}
 
-        if patches_mode != "all":
-
-            latest, is_pre = resolve(patches_repo, patches_mode, headers=auth_headers)
-
-            if is_pre:
-                prev_version = stored_source_versions.get("dev", {}).get("patches")
-            else:
-                prev_version = stored_source_versions.get("latest", {}).get("patches")
-
-            log_source(patches_repo)
-
-            if patches_mode in ["latest", "dev"]:
-                status = (
-                    "SKIPPED"
-                    if latest is None
-                    else (
-                        "UPDATE AVAILABLE" if latest != prev_version else "UP TO DATE"
-                    )
-                )
-            else:
-                status = (
-                    "NOT FOUND"
-                    if latest is None
-                    else (
-                        "UPDATE AVAILABLE" if latest != prev_version else "UP TO DATE"
-                    )
-                )
-
-            if patches_mode in ["latest", "dev"]:
-                log_version_status(
-                    patches_mode,
-                    [
-                        ("Upstream", latest),
-                        ("Stored", prev_version),
-                    ],
-                    status,
-                )
-            else:
-                log_version_status(
-                    patches_mode,
-                    [
-                        ("Requested", patches_mode),
-                        ("Stored", prev_version),
-                    ],
-                    status,
-                )
-
-            if latest and latest != prev_version:
-                sources_to_build.append(patches_repo)
-
-            continue
-
-        latest_stable, latest_dev = resolve_channels(patches_repo, headers=auth_headers)
-
-        stored_latest = stored_source_versions.get("latest", {}).get("patches")
-        stored_dev = stored_source_versions.get("dev", {}).get("patches")
+        if not has_prerelease_mode and "pre-release" in stored_source_versions:
+            stored_source_versions.pop("pre-release")
+            stale_channels_removed = True
+            removed_channels.append(patches_repo)
 
         log_source(patches_repo)
 
-        if latest_stable is None and latest_dev is None:
-            status = "SKIPPED"
-        else:
-            stable_changed = latest_stable and (
-                stored_latest is None or Version(latest_stable) > Version(stored_latest)
+        needs_channel_check = ("latest" in modes) or has_prerelease_mode
+
+        if needs_channel_check:
+            upstream_latest, upstream_absolutely_latest = resolve_channels(
+                patches_repo, headers=auth_headers
             )
 
-            dev_changed = latest_dev and latest_dev != stored_dev
+            stored_latest = stored_source_versions.get("latest", {}).get("patches")
+            stored_prerelease = stored_source_versions.get("pre-release", {}).get(
+                "patches"
+            )
 
-            if stable_changed:
-                status = "UPDATE AVAILABLE"
-            elif dev_changed:
-                dev_base = latest_dev.split("-dev", 1)[0]
-                if stored_latest and Version(dev_base) <= Version(stored_latest):
-                    status = "UP TO DATE"
+            stable_changed = upstream_latest and (
+                stored_latest is None
+                or Version(upstream_latest) > Version(stored_latest)
+            )
+
+            if has_prerelease_mode:
+                prerelease_changed = (
+                    upstream_absolutely_latest
+                    and upstream_absolutely_latest != stored_prerelease
+                )
+
+                if stable_changed:
+                    overall_status = "UPDATE AVAILABLE"
+                elif prerelease_changed:
+                    pre_base = (
+                        upstream_absolutely_latest.split("-dev", 1)[0]
+                        if "-dev" in upstream_absolutely_latest
+                        else upstream_absolutely_latest
+                    )
+                    if stored_latest and Version(pre_base) <= Version(stored_latest):
+                        overall_status = "UP TO DATE"
+                    else:
+                        overall_status = "UPDATE AVAILABLE"
                 else:
-                    status = "UPDATE AVAILABLE"
+                    overall_status = "UP TO DATE"
+
+                log_version_status_channels(
+                    [("Upstream", upstream_latest), ("Stored", stored_latest)],
+                    [
+                        ("Upstream", upstream_absolutely_latest),
+                        ("Stored", stored_prerelease),
+                    ],
+                    overall_status,
+                )
+
+                if stable_changed:
+                    sources_to_build.append(("latest", patches_repo))
+                elif prerelease_changed and overall_status == "UPDATE AVAILABLE":
+                    sources_to_build.append(("pre-release", patches_repo))
+
             else:
-                status = "UP TO DATE"
+                if stable_changed:
+                    log_version_status(
+                        "latest",
+                        [("Upstream", upstream_latest), ("Stored", stored_latest)],
+                        "UPDATE AVAILABLE",
+                    )
+                    sources_to_build.append(("latest", patches_repo))
+                else:
+                    log_version_status(
+                        "latest",
+                        [("Upstream", upstream_latest), ("Stored", stored_latest)],
+                        "UP TO DATE" if upstream_latest else "SKIPPED",
+                    )
 
-        log_version_status(
-            "all",
-            [
-                ("Stable Upstream", latest_stable),
-                ("Stable Stored", stored_latest),
-                ("Dev Upstream", latest_dev),
-                ("Dev Stored", stored_dev),
-            ],
-            status,
-        )
+        for tag in sorted(specific_tags):
+            tag_resolved, tag_is_pre = resolve(patches_repo, tag, headers=auth_headers)
+            channel_key = "pre-release" if tag_is_pre else "latest"
+            prev_tag_version = stored_source_versions.get(channel_key, {}).get(
+                "patches"
+            )
 
-        stable_changed = latest_stable and (
-            stored_latest is None or Version(latest_stable) > Version(stored_latest)
-        )
-
-        if stable_changed:
-            sources_to_build.append(("stable", patches_repo))
-            continue
-
-        dev_changed = latest_dev and latest_dev != stored_dev
-
-        if dev_changed:
-            dev_base = latest_dev.split("-dev", 1)[0]
-            if stored_latest and Version(dev_base) <= Version(stored_latest):
-                continue
-            sources_to_build.append(("dev", patches_repo))
+            if tag_resolved and tag_resolved != prev_tag_version:
+                log_version_status(
+                    tag,
+                    [("Requested", tag), ("Stored", prev_tag_version)],
+                    "UPDATE AVAILABLE",
+                )
+                sources_to_build.append((tag, patches_repo))
+            else:
+                log_version_status(
+                    tag,
+                    [("Requested", tag), ("Stored", prev_tag_version)],
+                    "NOT FOUND" if not tag_resolved else "UP TO DATE",
+                )
 
     if not sources_to_build:
         log_space()
         log_info("All patches are up to date")
         log_space()
+        Path("build_matrix.json").write_text(json.dumps({"include": []}))
         return
 
     log_space()
@@ -1123,17 +1286,10 @@ def run_resolver():
         + ("s" if update_count != 1 else "")
     )
 
-    log_sub("Trigger Build")
-
-    for build_target in sources_to_build:
-        if isinstance(build_target, tuple):
-            build_channel, patches_repo = build_target
-            if build_channel == "stable":
-                trigger(patches_repo, "latest")
-            else:
-                trigger(patches_repo)
-        else:
-            trigger(build_target)
+    matrix_items = []
+    for build_channel, patches_repo in sources_to_build:
+        matrix_items.append({"source": patches_repo, "mode": build_channel})
+    Path("build_matrix.json").write_text(json.dumps({"include": matrix_items}))
 
     if (
         stale_channels_removed

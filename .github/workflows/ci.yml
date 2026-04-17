@@ -13,10 +13,14 @@ permissions:
 jobs:
   resolver:
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.resolve.outputs.matrix }}
+      has_builds: ${{ steps.resolve.outputs.has_builds }}
     steps:
       - uses: actions/checkout@v6
 
-      - run: |
+      - id: resolve
+        run: |
           set -e
 
           if [ "${{ github.repository }}" = "rjaakash/peachmeow" ]; then
@@ -29,7 +33,15 @@ jobs:
             export GH_TOKEN="${{ github.token }}"
           fi
 
+          export PEACHMEOW_GITHUB_PAT="$GH_TOKEN"
+
           python3 resolver.py
+
+          matrix=$(cat build_matrix.json)
+          echo "matrix=$matrix" >> $GITHUB_OUTPUT
+
+          has_builds=$(python3 -c "import json; d=json.load(open('build_matrix.json')); print('true' if d.get('include') else 'false')")
+          echo "has_builds=$has_builds" >> $GITHUB_OUTPUT
 
           workflow_run_ids=$(gh run list --limit 200 --json databaseId -q '.[].databaseId')
 
@@ -40,3 +52,77 @@ jobs:
               gh run delete "$run_id"
             fi
           done
+
+  build:
+    needs: resolver
+    if: needs.resolver.outputs.has_builds == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.resolver.outputs.matrix) }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - name: Validate secrets
+        if: github.repository == 'rjaakash/peachmeow'
+        env:
+          keystore_b64_secret: ${{ secrets.SIGNING_KEYSTORE_B64 }}
+          keystore_password_secret: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
+          key_alias_secret: ${{ secrets.SIGNING_KEY_ALIAS }}
+          key_password_secret: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          github_pat_secret: ${{ secrets.PEACHMEOW_GITHUB_PAT }}
+        run: |
+          set -e
+          if [ -z "$keystore_b64_secret" ]; then exit 1; fi
+          if [ -z "$keystore_password_secret" ]; then exit 1; fi
+          if [ -z "$key_alias_secret" ]; then exit 1; fi
+          if [ -z "$key_password_secret" ]; then exit 1; fi
+          if [ -z "$github_pat_secret" ]; then exit 1; fi
+
+      - name: Prepare keystore
+        if: github.repository == 'rjaakash/peachmeow'
+        run: |
+          echo "${{ secrets.SIGNING_KEYSTORE_B64 }}" | base64 -d > peachmeow-official.bks
+
+      - name: Authenticate
+        run: |
+          if [ "${{ github.repository }}" = "rjaakash/peachmeow" ]; then
+            printf '%s' "${{ secrets.PEACHMEOW_GITHUB_PAT }}" | gh auth login --with-token
+          else
+            printf '%s' "${{ github.token }}" | gh auth login --with-token
+          fi
+
+      - name: Build (official)
+        if: github.repository == 'rjaakash/peachmeow'
+        env:
+          SIGNING_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          PEACHMEOW_GITHUB_PAT: ${{ secrets.PEACHMEOW_GITHUB_PAT }}
+        run: |
+          export SIGNING_KEYSTORE_FILE=peachmeow-official.bks
+
+          if [ -z "${{ matrix.mode }}" ]; then
+            python3 main.py --source "${{ matrix.source }}"
+          else
+            python3 main.py --source "${{ matrix.source }}" --mode "${{ matrix.mode }}"
+          fi
+
+      - name: Build (community)
+        if: github.repository != 'rjaakash/peachmeow'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          export PEACHMEOW_GITHUB_PAT="$GH_TOKEN"
+
+          if [ -z "${{ matrix.mode }}" ]; then
+            python3 main.py --source "${{ matrix.source }}"
+          else
+            python3 main.py --source "${{ matrix.source }}" --mode "${{ matrix.mode }}"
+          fi

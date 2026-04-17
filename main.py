@@ -1,4 +1,5 @@
 import os
+import shutil
 from utils import *
 
 cli_target_source, cli_build_mode, dry_run, auth_headers = build_init()
@@ -34,13 +35,21 @@ else:
     }
 
 if not dry_run:
-    mkdir_clean("unpatched", "tools", "patches", "build")
+    if is_ci_environment():
+        mkdir_clean("unpatched", "tools", "patches", "build")
+    else:
+        mkdir_clean("build")
+        mkdir_ensure("unpatched", "tools", "patches")
 
 apkeditor_download_url = get_apkeditor_url(auth_headers)
 if apkeditor_download_url and not dry_run:
-    log_sub("APKEditor")
-    if download_with_retry(apkeditor_download_url, "tools/apkeditor.jar") != 0:
-        die("apkeditor download failed")
+    apkeditor_path = Path("tools/apkeditor.jar")
+    if apkeditor_path.exists() and apkeditor_path.stat().st_size > 10_000:
+        log_cache("APKEditor: apkeditor.jar")
+    else:
+        log_sub("APKEditor")
+        if download_with_retry(apkeditor_download_url, "tools/apkeditor.jar") != 0:
+            die("apkeditor download failed")
 
 built_apps = []
 used_patches_versions = {}
@@ -62,6 +71,10 @@ for app_table_name, app_entry in app_entries.items():
     if patches_repo not in target_patch_sources:
         continue
 
+    app_patches_mode = app_entry.get("patches-version") or default_patches_mode
+    if cli_build_mode == "pre-release" and app_patches_mode != "pre-release":
+        continue
+
     log_section(app_table_name)
 
     patches_mode = resolve_build_mode(
@@ -75,7 +88,7 @@ for app_table_name, app_entry in app_entries.items():
 
     log_sub("Resolved")
     log_kv("Patches", patches_repo)
-    log_kv("Patches Version", patches_version)
+    log_kv("Patches Version", strip_v(patches_version))
 
     cli_repo = app_entry.get("cli-source") or default_cli_repo
     cli_resolve_mode = resolve_build_mode(
@@ -87,7 +100,7 @@ for app_table_name, app_entry in app_entries.items():
     )
 
     log_kv("CLI", cli_repo)
-    log_kv("CLI Version", cli_version)
+    log_kv("CLI Version", strip_v(cli_version))
 
     cli_owner, cli_repo_name = cli_repo.split("/")
     cli_dir = f"tools/{cli_owner}/{cli_repo_name}"
@@ -192,7 +205,7 @@ for app_table_name, app_entry in app_entries.items():
 
     log_sub("App")
     log_kv("Package", package_name)
-    log_kv("App Version", resolved_app_version)
+    log_kv("App Version", strip_v(resolved_app_version))
 
     input_apk = fetch_and_merge_apk(
         package_name, app_release, downloaded_apks_cache, app_table_name
@@ -226,6 +239,17 @@ if dry_run:
 if not built_apps:
     die("Nothing built")
 
+if not is_ci_environment():
+    local_output_dir = "/sdcard/Download/🐱 PeachMeow"
+    os.makedirs(local_output_dir, exist_ok=True)
+    for _, output_filename, *_ in built_apps:
+        shutil.copy2(
+            f"build/{output_filename}", f"{local_output_dir}/{output_filename}"
+        )
+        log_done(f"Saved: {local_output_dir}/{output_filename}")
+    log_plain_section("Build Complete")
+    exit(0)
+
 release_notes, patches_version, is_prerelease = build_release_notes(
     built_apps, used_patches_versions, cli_version, cli_repo, auth_headers
 )
@@ -233,6 +257,8 @@ release_notes, patches_version, is_prerelease = build_release_notes(
 publish_release(built_apps, release_notes, is_prerelease)
 
 update_state(used_patches_versions, cli_version, patches_source_order, is_prerelease)
+
+cleanup_releases(config, auth_headers)
 
 log_plain_section("Build Complete")
 log_done("Release created")

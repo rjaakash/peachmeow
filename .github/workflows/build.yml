@@ -2,19 +2,39 @@ name: Build
 
 on:
   workflow_dispatch:
-    inputs:
-      source:
-        required: false
-        default: ""
-      mode:
-        required: false
-        default: ""
 
 permissions:
   contents: write
 
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      has_builds: ${{ steps.matrix.outputs.has_builds }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - id: matrix
+        run: |
+          if [ "${{ github.repository }}" = "rjaakash/peachmeow" ]; then
+            export PEACHMEOW_GITHUB_PAT="${{ secrets.PEACHMEOW_GITHUB_PAT }}"
+          fi
+
+          python3 -c "from utils import *; generate_build_matrix()"
+
+          matrix=$(cat build_matrix.json)
+          echo "matrix=$matrix" >> $GITHUB_OUTPUT
+
+          has_builds=$(python3 -c "import json; d=json.load(open('build_matrix.json')); print('true' if d.get('include') else 'false')")
+          echo "has_builds=$has_builds" >> $GITHUB_OUTPUT
+
   build:
+    needs: prepare
+    if: needs.prepare.outputs.has_builds == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
     runs-on: ubuntu-latest
 
     steps:
@@ -63,16 +83,7 @@ jobs:
           PEACHMEOW_GITHUB_PAT: ${{ secrets.PEACHMEOW_GITHUB_PAT }}
         run: |
           export SIGNING_KEYSTORE_FILE=peachmeow-official.bks
-
-          if [ -z "${{ github.event.inputs.source }}" ]; then
-            python3 main.py
-          else
-            if [ -z "${{ github.event.inputs.mode }}" ]; then
-              python3 main.py --source "${{ github.event.inputs.source }}"
-            else
-              python3 main.py --source "${{ github.event.inputs.source }}" --mode "${{ github.event.inputs.mode }}"
-            fi
-          fi
+          python3 main.py --source "${{ matrix.source }}" --mode "${{ matrix.mode }}"
 
       - name: Build (community)
         if: github.repository != 'rjaakash/peachmeow'
@@ -80,13 +91,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           export PEACHMEOW_GITHUB_PAT="$GH_TOKEN"
-
-          if [ -z "${{ github.event.inputs.source }}" ]; then
-            python3 main.py
-          else
-            if [ -z "${{ github.event.inputs.mode }}" ]; then
-              python3 main.py --source "${{ github.event.inputs.source }}"
-            else
-              python3 main.py --source "${{ github.event.inputs.source }}" --mode "${{ github.event.inputs.mode }}"
-            fi
-          fi
+          python3 main.py --source "${{ matrix.source }}" --mode "${{ matrix.mode }}"
