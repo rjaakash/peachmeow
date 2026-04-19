@@ -4,5 +4,11 @@
       "patches": "v1.25.0",
       "cli": "v1.7.0"
     }
+  },
+  "anddea/revanced-patches": {
+    "latest": {
+      "patches": "v4.0.0",
+      "cli": "v1.7.0"
+    }
   }
 }
