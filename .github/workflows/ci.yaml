@@ -1,0 +1,228 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 18 * * *"
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.run-plan.outputs.matrix }}
+      has_builds: ${{ steps.run-plan.outputs.has_builds }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Checking for Updates
+        id: run-plan
+        run: |
+          set -e
+
+          if [ "${{ github.repository }}" = "rjaakash/peachmeow" ]; then
+            if [ -z "${{ secrets.PEACHMEOW_GITHUB_PAT }}" ]; then
+              echo "PEACHMEOW_GITHUB_PAT is required in main repo"
+              exit 1
+            fi
+            export GH_TOKEN="${{ secrets.PEACHMEOW_GITHUB_PAT }}"
+          else
+            export GH_TOKEN="${{ github.token }}"
+          fi
+
+          export PEACHMEOW_GITHUB_PAT="$GH_TOKEN"
+
+          python3 scripts/plan.py
+
+          matrix=$(cat build_matrix.json)
+          echo "matrix=$matrix" >> $GITHUB_OUTPUT
+
+          has_builds=$(python3 -c "import json; d=json.load(open('build_matrix.json')); print('true' if d.get('include') else 'false')")
+          echo "has_builds=$has_builds" >> $GITHUB_OUTPUT
+
+          workflow_run_ids=$(gh run list --limit 200 --json databaseId -q '.[].databaseId')
+
+          run_count=0
+          for run_id in $workflow_run_ids; do
+            run_count=$((run_count+1))
+            if [ $run_count -gt 10 ]; then
+              gh run delete "$run_id"
+            fi
+          done
+
+  expand-matrix:
+    needs: plan
+    if: needs.plan.outputs.has_builds == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.expand-per-app.outputs.matrix }}
+      has_builds: ${{ steps.expand-per-app.outputs.has_builds }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Configure App Builds
+        id: expand-per-app
+        env:
+          BASE_MATRIX: ${{ needs.plan.outputs.matrix }}
+        run: |
+          matrix=$(python3 -c "import sys; sys.path.insert(0, 'src'); from main import expand_app_matrix; expand_app_matrix()")
+          echo "matrix=$matrix" >> $GITHUB_OUTPUT
+          has_builds=$(MATRIX="$matrix" python3 -c "import json, os; d=json.loads(os.environ['MATRIX']); print('true' if d.get('include') else 'false')")
+          echo "has_builds=$has_builds" >> $GITHUB_OUTPUT
+
+  build:
+    needs: expand-matrix
+    if: needs.expand-matrix.outputs.has_builds == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.expand-matrix.outputs.matrix) }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Set Up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - name: Verify Secrets
+        if: github.repository == 'rjaakash/peachmeow'
+        env:
+          keystore_b64_secret: ${{ secrets.SIGNING_KEYSTORE_B64 }}
+          keystore_password_secret: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
+          key_alias_secret: ${{ secrets.SIGNING_KEY_ALIAS }}
+          key_password_secret: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          github_pat_secret: ${{ secrets.PEACHMEOW_GITHUB_PAT }}
+        run: |
+          set -e
+          if [ -z "$keystore_b64_secret" ]; then exit 1; fi
+          if [ -z "$keystore_password_secret" ]; then exit 1; fi
+          if [ -z "$key_alias_secret" ]; then exit 1; fi
+          if [ -z "$key_password_secret" ]; then exit 1; fi
+          if [ -z "$github_pat_secret" ]; then exit 1; fi
+
+      - name: Prepare Keystore
+        if: github.repository == 'rjaakash/peachmeow'
+        run: |
+          echo "${{ secrets.SIGNING_KEYSTORE_B64 }}" | base64 -d > peachmeow-official.bks
+
+      - name: Login to GitHub CLI
+        run: |
+          if [ "${{ github.repository }}" = "rjaakash/peachmeow" ]; then
+            printf '%s' "${{ secrets.PEACHMEOW_GITHUB_PAT }}" | gh auth login --with-token
+          else
+            printf '%s' "${{ github.token }}" | gh auth login --with-token
+          fi
+
+      - name: Build Official Release
+        if: github.repository == 'rjaakash/peachmeow'
+        env:
+          SIGNING_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          PEACHMEOW_GITHUB_PAT: ${{ secrets.PEACHMEOW_GITHUB_PAT }}
+          PEACHMEOW_APP: ${{ matrix.app }}
+        run: |
+          export SIGNING_KEYSTORE_FILE=peachmeow-official.bks
+          python3 scripts/build.py --source "${{ matrix.source }}" --mode "${{ matrix.mode }}"
+
+      - name: Build Community Release
+        if: github.repository != 'rjaakash/peachmeow'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PEACHMEOW_APP: ${{ matrix.app }}
+        run: |
+          export PEACHMEOW_GITHUB_PAT="$GH_TOKEN"
+          python3 scripts/build.py --source "${{ matrix.source }}" --mode "${{ matrix.mode }}"
+
+      - name: Generate Artifact Name
+        id: artifact-name
+        env:
+          MATRIX_SOURCE: ${{ matrix.source }}
+          MATRIX_MODE: ${{ matrix.mode }}
+          MATRIX_APP: ${{ matrix.app }}
+        run: |
+          name=$(python3 -c "import sys; sys.path.insert(0, 'src'); from main import compute_artifact_name; print(compute_artifact_name())")
+          echo "name=$name" >> $GITHUB_OUTPUT
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.artifact-name.outputs.name }}
+          path: build/
+
+  release:
+    needs: plan
+    if: needs.plan.outputs.has_builds == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.plan.outputs.matrix) }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Wait for Artifacts
+        id: wait-artifacts
+        env:
+          MATRIX_SOURCE: ${{ matrix.source }}
+          MATRIX_MODE: ${{ matrix.mode }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -c "import sys; sys.path.insert(0, 'src'); from main import wait_for_artifacts; wait_for_artifacts()"
+
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: build/
+          pattern: ${{ steps.wait-artifacts.outputs.prefix }}*
+          merge-multiple: true
+
+      - name: Login to GitHub CLI
+        run: |
+          if [ "${{ github.repository }}" = "rjaakash/peachmeow" ]; then
+            printf '%s' "${{ secrets.PEACHMEOW_GITHUB_PAT }}" | gh auth login --with-token
+          else
+            printf '%s' "${{ github.token }}" | gh auth login --with-token
+          fi
+
+      - name: Publish Official Release
+        if: github.repository == 'rjaakash/peachmeow'
+        env:
+          PEACHMEOW_GITHUB_PAT: ${{ secrets.PEACHMEOW_GITHUB_PAT }}
+        run: |
+          python3 scripts/release.py --source "${{ matrix.source }}" --mode "${{ matrix.mode }}"
+
+      - name: Publish Community Release
+        if: github.repository != 'rjaakash/peachmeow'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          export PEACHMEOW_GITHUB_PAT="$GH_TOKEN"
+          python3 scripts/release.py --source "${{ matrix.source }}" --mode "${{ matrix.mode }}"
+
+  cleanup-artifacts:
+    needs: release
+    runs-on: ubuntu-latest
+    if: needs.plan.outputs.has_builds == 'true'
+
+    steps:
+      - name: Login to GitHub CLI
+        run: |
+          printf '%s' "${{ github.token }}" | gh auth login --with-token
+
+      - name: Delete Build Artifacts
+        run: |
+          gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts \
+            --jq '.artifacts[] | select(.expired == false) | .id' | while read id; do
+              gh api --method DELETE repos/${{ github.repository }}/actions/artifacts/$id
+          done

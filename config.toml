@@ -22,13 +22,13 @@ patches-source = "RookieEnough/De-ReVanced"
 morphe-brand = "De-ReVanced"
 patcher-args = "-e 'Enable DCIM folders backup control'"
 
-["Proton VPN hoo-dles"]
+["Proton VPN hoodles"]
 package-name = "ch.protonvpn.android"
 app-name = "ProtonVPN"
 app-version = "🐱"
 app-source = "ProtonVPN/android-app"
 patches-source = "hoo-dles/morphe-patches"
-morphe-brand = "hoo-dles"
+morphe-brand = "hoodles"
 patcher-args = "-f"
 
 [Reddit]
