@@ -1,4 +1,10 @@
 {
+  "RookieEnough/De-ReVanced": {
+    "latest": {
+      "patches": "v1.0.3",
+      "cli": "v1.7.0"
+    }
+  },
   "hoo-dles/morphe-patches": {
     "latest": {
       "patches": "v1.25.0",
