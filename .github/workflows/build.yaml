@@ -102,6 +102,7 @@ jobs:
 
       - name: Build Official Release
         if: github.repository == 'rjaakash/peachmeow'
+        continue-on-error: true
         env:
           SIGNING_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
@@ -114,6 +115,7 @@ jobs:
 
       - name: Build Community Release
         if: github.repository != 'rjaakash/peachmeow'
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           PEACHMEOW_APP: ${{ matrix.app }}

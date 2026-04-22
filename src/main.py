@@ -432,6 +432,7 @@ def run_plan():
     stale_channels_removed = False
     removed_sources = []
     removed_channels = []
+    removed_tags_by_source = {}
 
     for stale_source in list(saved_versions.keys()):
         if stale_source not in active_patch_sources:
@@ -448,6 +449,27 @@ def run_plan():
             commit_message = "delete: stale patches sources → " + ", ".join(
                 removed_sources
             )
+        git_commit_versions_and_push(saved_versions, commit_message)
+
+    for patches_repo, modes in patch_sources.items():
+        active_custom_tags = {m for m in modes if m not in ("latest", "pre-release")}
+        stored_tags = saved_versions.get(patches_repo, {}).get("tags", [])
+        stale_tags = [t for t in stored_tags if t not in active_custom_tags]
+        if stale_tags:
+            saved_versions.setdefault(patches_repo, {})["tags"] = [
+                t for t in stored_tags if t in active_custom_tags
+            ]
+            removed_tags_by_source[patches_repo] = stale_tags
+
+    if removed_tags_by_source and state_branch_exists and versions_file_existed:
+        parts = []
+        for src, tags in removed_tags_by_source.items():
+            parts.append(f"{src} @ {', '.join(tags)}")
+        total_tags = sum(len(t) for t in removed_tags_by_source.values())
+        if total_tags == 1 and len(removed_tags_by_source) == 1:
+            commit_message = f"delete: unused tag → {parts[0]}"
+        else:
+            commit_message = "delete: unused tags → " + ", ".join(parts)
         git_commit_versions_and_push(saved_versions, commit_message)
 
     sources_to_build = []
@@ -533,24 +555,22 @@ def run_plan():
                         "UP TO DATE" if upstream_latest else "SKIPPED",
                     )
 
+        stored_tags = stored_source_versions.get("tags", [])
         for tag in sorted(specific_tags):
-            tag_resolved, tag_is_pre = resolve(patches_repo, tag, headers=auth_headers)
-            channel_key = "pre-release" if tag_is_pre else "latest"
-            prev_tag_version = stored_source_versions.get(channel_key, {}).get(
-                "patches"
-            )
+            tag_resolved, _ = resolve(patches_repo, tag, headers=auth_headers)
+            already_stored = tag in stored_tags
 
-            if tag_resolved and tag_resolved != prev_tag_version:
+            if tag_resolved and not already_stored:
                 log_version_status(
                     tag,
-                    [("Requested", tag), ("Stored", prev_tag_version)],
+                    [("Requested", tag), ("Stored", None)],
                     "UPDATE AVAILABLE",
                 )
                 sources_to_build.append((tag, patches_repo))
             else:
                 log_version_status(
                     tag,
-                    [("Requested", tag), ("Stored", prev_tag_version)],
+                    [("Requested", tag), ("Stored", tag if already_stored else None)],
                     "NOT FOUND" if not tag_resolved else "UP TO DATE",
                 )
 
@@ -724,19 +744,44 @@ def wait_for_artifacts():
     deadline = time.time() + 3600
 
     while True:
-        raw = subprocess.check_output(
+        raw_artifacts = subprocess.check_output(
             ["gh", "api", f"repos/{repo}/actions/runs/{run_id}/artifacts"],
             text=True,
         )
-        data = json.loads(raw)
+        artifact_data = json.loads(raw_artifacts)
         names = [
             item["name"]
-            for item in data.get("artifacts", [])
+            for item in artifact_data.get("artifacts", [])
             if not item.get("expired")
         ]
         matched = [n for n in names if n.startswith(prefix)]
+
         if len(matched) >= len(selected):
             break
+
+        raw_jobs = subprocess.check_output(
+            ["gh", "api", f"repos/{repo}/actions/runs/{run_id}/jobs?per_page=100"],
+            text=True,
+        )
+        jobs_data = json.loads(raw_jobs)
+        build_jobs = [
+            j
+            for j in jobs_data.get("jobs", [])
+            if j.get("name", "").startswith("build ")
+        ]
+        all_build_jobs_done = build_jobs and all(
+            j.get("status") == "completed" for j in build_jobs
+        )
+
+        if all_build_jobs_done:
+            if matched:
+                break
+            print(
+                f"All build jobs completed but no artifacts found for {source} {mode}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
         if time.time() > deadline:
             print(
                 f"Timed out waiting for artifacts for {source} {mode}", file=sys.stderr
@@ -1025,12 +1070,21 @@ def run_build():
             ordered = {}
             for future in as_completed(future_map):
                 idx = future_map[future]
-                ordered[idx] = future.result()
+                try:
+                    ordered[idx] = future.result()
+                except SystemExit:
+                    app_table_name = selected_apps[idx][0]
+                    log_info(f"Skipping {app_table_name} due to build failure")
             for idx in sorted(ordered):
                 results.append(ordered[idx])
     else:
         for app_table_name, app_entry, patches_repo in selected_apps:
-            results.append(build_single_app(app_table_name, app_entry, patches_repo))
+            try:
+                results.append(
+                    build_single_app(app_table_name, app_entry, patches_repo)
+                )
+            except SystemExit:
+                log_info(f"Skipping {app_table_name} due to build failure")
 
     built_apps = [
         (
@@ -1187,7 +1241,9 @@ def publish_release(built_apps, release_notes, is_prerelease):
     subprocess.run(gh_release_cmd, check=True)
 
 
-def update_state(used_patches_versions, patches_source_order, is_prerelease):
+def update_state(
+    used_patches_versions, patches_source_order, build_mode, is_prerelease
+):
     patches_repo = list(used_patches_versions.keys())[0]
     patches_version = list(used_patches_versions.values())[0]
     commit_message = f"release: {patches_repo} → {patches_version}"
@@ -1238,7 +1294,14 @@ def update_state(used_patches_versions, patches_source_order, is_prerelease):
 
         source_version_entry = stored_versions.setdefault(patches_repo, {})
 
-        if is_prerelease:
+        is_custom_tag = build_mode not in (None, "latest", "pre-release")
+
+        if is_custom_tag:
+            existing_tags = source_version_entry.get("tags", [])
+            if patches_version not in existing_tags:
+                existing_tags.append(patches_version)
+            source_version_entry["tags"] = existing_tags
+        elif is_prerelease:
             source_version_entry["pre-release"] = {
                 "patches": patches_version,
             }
@@ -1260,9 +1323,15 @@ def update_state(used_patches_versions, patches_source_order, is_prerelease):
             for key in ["latest", "pre-release"]:
                 if key in channels:
                     ordered_channels[key] = channels[key]
-            for key in channels:
-                if key not in ordered_channels:
-                    ordered_channels[key] = channels[key]
+            if "tags" in channels:
+                try:
+                    ordered_channels["tags"] = sorted(
+                        channels["tags"],
+                        key=lambda t: Version(strip_v(t)),
+                        reverse=True,
+                    )
+                except Exception:
+                    ordered_channels["tags"] = channels["tags"]
             ordered_stored_versions[patches_src] = ordered_channels
 
         Path(VERSIONS_FILENAME).write_text(
@@ -1332,6 +1401,8 @@ def cleanup_releases(config, auth_headers):
 
     defaults = get_config_defaults(config)
     default_brand = defaults["brand"]
+    default_patches_repo = defaults["patches_repo"]
+    default_patches_mode = defaults["patches_mode"]
     app_entries = extract_app_entries(config)
 
     present_brands = set()
@@ -1345,6 +1416,23 @@ def cleanup_releases(config, auth_headers):
             continue
         brand = app_entry.get("morphe-brand") or default_brand
         active_brands.add(brand)
+
+    active_custom_tags_by_source = {}
+    for app_entry in app_entries.values():
+        if app_entry.get("enabled", True) is False:
+            continue
+        patches_repo = app_entry.get("patches-source") or default_patches_repo
+        patches_mode = app_entry.get("patches-version") or default_patches_mode
+        if patches_mode not in ("latest", "pre-release"):
+            active_custom_tags_by_source.setdefault(patches_repo, set()).add(
+                patches_mode
+            )
+
+    brand_to_source = {}
+    for app_entry in app_entries.values():
+        brand = app_entry.get("morphe-brand") or default_brand
+        patches_repo = app_entry.get("patches-source") or default_patches_repo
+        brand_to_source[brand] = patches_repo
 
     all_releases = []
     page = 1
@@ -1377,12 +1465,42 @@ def cleanup_releases(config, auth_headers):
         if brand not in active_brands:
             continue
 
+        source_for_brand = brand_to_source.get(brand)
+        active_tags_for_brand = active_custom_tags_by_source.get(
+            source_for_brand, set()
+        )
+        active_tags_normalized = {ensure_v(t) for t in active_tags_for_brand}
+
+        custom_releases = []
+        non_custom_releases = []
+        for r in releases:
+            ver = _extract_patches_version_from_release_body(r.get("body") or "")
+            if ver and ensure_v(ver) in active_tags_normalized:
+                custom_releases.append(r)
+            else:
+                non_custom_releases.append(r)
+
+        seen_custom_versions = {}
+        for r in sorted(
+            custom_releases,
+            key=lambda r: r.get("published_at") or r.get("created_at") or "",
+            reverse=True,
+        ):
+            ver = _extract_patches_version_from_release_body(r.get("body") or "")
+            if not ver:
+                continue
+            ver_normalized = ensure_v(ver)
+            if ver_normalized in seen_custom_versions:
+                _delete_release_and_tag(r["tag_name"])
+            else:
+                seen_custom_versions[ver_normalized] = r
+
         stable_releases = sorted(
-            [r for r in releases if not r["prerelease"]],
+            [r for r in non_custom_releases if not r["prerelease"]],
             key=lambda r: r.get("published_at") or r.get("created_at") or "",
             reverse=True,
         )
-        pre_releases = [r for r in releases if r["prerelease"]]
+        pre_releases = [r for r in non_custom_releases if r["prerelease"]]
 
         seen_stable_versions = {}
         for r in stable_releases:
@@ -1528,7 +1646,7 @@ def run_release():
         for app_table_name, app_entry in app_entries.items()
         if isinstance(app_entry, dict) and app_entry.get("enabled", True)
     ]
-    update_state(used_patches_versions, toml_order_sources, is_prerelease)
+    update_state(used_patches_versions, toml_order_sources, build_mode, is_prerelease)
 
     cleanup_releases(config, auth_headers)
     log_plain_section("Release Complete")
