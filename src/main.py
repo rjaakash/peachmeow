@@ -271,8 +271,71 @@ def build_output_filename(
     return "-".join(filename_parts) + ".apk"
 
 
+def ensure_apkeditor(auth_headers):
+    apkeditor_path = Path("tools/apkeditor.jar")
+    if apkeditor_path.exists() and apkeditor_path.stat().st_size > 10_000:
+        log_cache("APKEditor: apkeditor.jar")
+        return
+    apkeditor_download_url = get_apkeditor_url(auth_headers)
+    if not apkeditor_download_url:
+        die("APKEditor release not found")
+    log_sub("APKEditor")
+    if download_with_retry(apkeditor_download_url, "tools/apkeditor.jar") != 0:
+        die("apkeditor download failed")
+
+
+def _merge_apkm(apkm_path, apk_path, auth_headers):
+    ensure_apkeditor(auth_headers)
+    log_sub("Merging")
+    run(
+        [
+            "java",
+            "-jar",
+            "tools/apkeditor.jar",
+            "m",
+            "-f",
+            "-i",
+            apkm_path,
+            "-o",
+            apk_path,
+        ]
+    )
+    os.remove(apkm_path)
+
+
+def fetch_external_apk(app_table_name, app_entry, auth_headers):
+    apk_url = app_entry.get("apk-url")
+    apkm_url = app_entry.get("apkm-url")
+
+    external_dir = f"unpatched-external/{app_table_name}"
+    os.makedirs(external_dir, exist_ok=True)
+
+    if apk_url:
+        dest = f"{external_dir}/{app_table_name}.apk"
+        if Path(dest).exists() and Path(dest).stat().st_size > 10_000:
+            log_cache(f"External APK: {dest}")
+            return dest
+        if download_with_retry(apk_url, dest) == 0:
+            return dest
+        if not apkm_url:
+            die(f"{app_table_name}: external APK download failed")
+
+    if apkm_url:
+        apkm_dest = f"{external_dir}/{app_table_name}.apkm"
+        apk_dest = f"{external_dir}/{app_table_name}.apk"
+        if Path(apk_dest).exists() and Path(apk_dest).stat().st_size > 10_000:
+            log_cache(f"External APK: {apk_dest}")
+            return apk_dest
+        if download_with_retry(apkm_url, apkm_dest) != 0:
+            die(f"{app_table_name}: external APKM download failed")
+        _merge_apkm(apkm_dest, apk_dest, auth_headers)
+        return apk_dest
+
+    die(f"{app_table_name}: no external URL available")
+
+
 def fetch_and_merge_apk(
-    package_name, app_release, downloaded_apks_cache, app_table_name
+    package_name, app_release, downloaded_apks_cache, app_table_name, auth_headers
 ):
     apk_assets = [
         a for a in app_release.get("assets", []) if a["name"].endswith(".apk")
@@ -314,21 +377,7 @@ def fetch_and_merge_apk(
         die(app_table_name)
 
     if apk_filename.endswith(".apkm"):
-        log_sub("Merging")
-        run(
-            [
-                "java",
-                "-jar",
-                "tools/apkeditor.jar",
-                "m",
-                "-f",
-                "-i",
-                downloaded_file,
-                "-o",
-                merged_apk_path,
-            ]
-        )
-        os.remove(downloaded_file)
+        _merge_apkm(downloaded_file, merged_apk_path, auth_headers)
 
     downloaded_apks_cache[cache_key] = merged_apk_path
     return merged_apk_path
@@ -836,20 +885,10 @@ def run_build():
 
     if not dry_run:
         if is_ci_environment():
-            mkdir_clean("unpatched", "tools", "patches", "build")
+            mkdir_clean("unpatched", "unpatched-external", "tools", "patches", "build")
         else:
             mkdir_clean("build")
-            mkdir_ensure("unpatched", "tools", "patches")
-
-    apkeditor_download_url = get_apkeditor_url(auth_headers)
-    if apkeditor_download_url and not dry_run:
-        apkeditor_path = Path("tools/apkeditor.jar")
-        if apkeditor_path.exists() and apkeditor_path.stat().st_size > 10_000:
-            log_cache("APKEditor: apkeditor.jar")
-        else:
-            log_sub("APKEditor")
-            if download_with_retry(apkeditor_download_url, "tools/apkeditor.jar") != 0:
-                die("apkeditor download failed")
+            mkdir_ensure("unpatched", "unpatched-external", "tools", "patches")
 
     selected_apps = select_apps_for_build(
         app_entries,
@@ -924,56 +963,67 @@ def run_build():
         )
 
         package_name = app_entry.get("package-name") or die(app_table_name)
-        app_repo = app_entry.get("app-source") or die(app_table_name)
         brand = app_entry.get("morphe-brand") or default_brand
         app_name = app_entry.get("app-name")
         app_display_name = app_name or app_table_name
         variant = app_entry.get("variant")
-        configured_app_version = app_entry.get("app-version")
-        app_version_mode = configured_app_version or "auto"
 
-        if app_version_mode == "auto":
-            patches_json, _ = fetch_patches_list(
-                patches_repo,
-                is_prerelease,
-                app_entry,
-                {} if is_ci_environment() else patches_url_cache,
+        external_apk_url = app_entry.get("apk-url")
+        external_apkm_url = app_entry.get("apkm-url")
+        is_external = bool(external_apk_url or external_apkm_url)
+
+        if is_external:
+            configured_app_version = app_entry.get("app-version")
+            resolved_app_version = (
+                configured_app_version if configured_app_version else "Unknown"
             )
-            resolved_app_version = resolve_app_version(
-                app_table_name,
-                package_name,
-                app_display_name,
-                app_repo,
-                patches_json,
-                auth_headers,
-            )
-            release_tag = f"{app_display_name}-{resolved_app_version}"
-            app_release = gh(
-                f"https://api.github.com/repos/{app_repo}/releases/tags/{release_tag}",
-                headers=auth_headers,
-            )
-        elif configured_app_version == "🐱":
-            all_app_releases = gh(
-                f"https://api.github.com/repos/{app_repo}/releases?per_page=100",
-                headers=auth_headers,
-            )
-            app_release = next(
-                (
-                    release_entry
-                    for release_entry in all_app_releases
-                    if not release_entry["prerelease"]
-                ),
-                None,
-            )
-            if not app_release:
-                die(f"No 🐱 found for {app_repo}")
-            resolved_app_version = app_release["tag_name"]
         else:
-            resolved_app_version = app_version_mode
-            app_release = gh(
-                f"https://api.github.com/repos/{app_repo}/releases/tags/{resolved_app_version}",
-                headers=auth_headers,
-            )
+            app_repo = app_entry.get("app-source") or die(app_table_name)
+            configured_app_version = app_entry.get("app-version")
+            app_version_mode = configured_app_version or "auto"
+
+            if app_version_mode == "auto":
+                patches_json, _ = fetch_patches_list(
+                    patches_repo,
+                    is_prerelease,
+                    app_entry,
+                    {} if is_ci_environment() else patches_url_cache,
+                )
+                resolved_app_version = resolve_app_version(
+                    app_table_name,
+                    package_name,
+                    app_display_name,
+                    app_repo,
+                    patches_json,
+                    auth_headers,
+                )
+                release_tag = f"{app_display_name}-{resolved_app_version}"
+                app_release = gh(
+                    f"https://api.github.com/repos/{app_repo}/releases/tags/{release_tag}",
+                    headers=auth_headers,
+                )
+            elif configured_app_version == "🐱":
+                all_app_releases = gh(
+                    f"https://api.github.com/repos/{app_repo}/releases?per_page=100",
+                    headers=auth_headers,
+                )
+                app_release = next(
+                    (
+                        release_entry
+                        for release_entry in all_app_releases
+                        if not release_entry["prerelease"]
+                    ),
+                    None,
+                )
+                if not app_release:
+                    die(f"No 🐱 found for {app_repo}")
+                resolved_app_version = app_release["tag_name"]
+            else:
+                resolved_app_version = app_version_mode
+                app_release = gh(
+                    f"https://api.github.com/repos/{app_repo}/releases/tags/{resolved_app_version}",
+                    headers=auth_headers,
+                )
 
         output_filename = build_output_filename(
             app_display_name, resolved_app_version, brand, variant, patches_version
@@ -1000,12 +1050,16 @@ def run_build():
         log_kv("Package", package_name)
         log_kv("App Version", strip_v(resolved_app_version))
 
-        input_apk = fetch_and_merge_apk(
-            package_name,
-            app_release,
-            {} if is_ci_environment() else downloaded_apks_cache,
-            app_table_name,
-        )
+        if is_external:
+            input_apk = fetch_external_apk(app_table_name, app_entry, auth_headers)
+        else:
+            input_apk = fetch_and_merge_apk(
+                package_name,
+                app_release,
+                {} if is_ci_environment() else downloaded_apks_cache,
+                app_table_name,
+                auth_headers,
+            )
 
         ensure_apk(input_apk)
 
