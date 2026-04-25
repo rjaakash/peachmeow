@@ -253,9 +253,9 @@ def resolve_build_mode(build_mode, app_entry, config_key, default_mode):
     effective = app_entry.get(config_key) or default_mode
     if effective not in ("latest", "pre-release"):
         return effective
-    if not is_ci_environment():
+    if build_mode is None:
         return effective
-    if build_mode not in (None, "latest", "pre-release"):
+    if build_mode not in ("latest", "pre-release"):
         return effective
     if build_mode != "pre-release":
         return "latest"
