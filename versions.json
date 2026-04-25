@@ -4,6 +4,11 @@
       "patches": "v1.25.0-dev.3"
     }
   },
+  "RookieEnough/De-ReVanced": {
+    "latest": {
+      "patches": "v1.0.3"
+    }
+  },
   "hoo-dles/morphe-patches": {
     "latest": {
       "patches": "v1.27.0"
