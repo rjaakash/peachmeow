@@ -1366,6 +1366,9 @@ def build_release_notes(built_apps, used_patches_versions, cli_entries, auth_hea
             return (0, priority.index(app_name.lower()))
         return (1, app_name.lower())
 
+    total_apps = sum(len(apps) for apps in brand_apps.values())
+    app_header = "App Version 📦" if total_apps == 1 else "App Versions 📦"
+
     for brand in sorted(brand_apps.keys()):
         apps_grouped = brand_apps[brand]
         has_variants = any(
@@ -1373,12 +1376,12 @@ def build_release_notes(built_apps, used_patches_versions, cli_entries, auth_hea
             for items in apps_grouped.values()
         )
 
-        note_lines.append(f"## 🧩 {brand}\n")
+        note_lines.append(f"## {app_header}\n")
 
         if not has_variants:
             for app_name in sorted(apps_grouped.keys(), key=app_sort_key):
                 _, app_version_str = apps_grouped[app_name][0]
-                note_lines.append(f"- {app_name}: {ensure_v(app_version_str)}")
+                note_lines.append(f"- {app_name}: {strip_v(app_version_str)}")
             note_lines.append("")
         else:
             for app_name in sorted(apps_grouped.keys(), key=app_sort_key):
@@ -1391,11 +1394,11 @@ def build_release_notes(built_apps, used_patches_versions, cli_entries, auth_hea
 
                 for variant, app_version_str in sorted(items, key=variant_sort_key):
                     if len(items) == 1 and variant is None:
-                        note_lines.append(f"- {ensure_v(app_version_str)}")
+                        note_lines.append(f"- {strip_v(app_version_str)}")
                     elif variant is None:
-                        note_lines.append(f"- Base: {ensure_v(app_version_str)}")
+                        note_lines.append(f"- Base: {strip_v(app_version_str)}")
                     else:
-                        note_lines.append(f"- {variant}: {ensure_v(app_version_str)}")
+                        note_lines.append(f"- {variant}: {strip_v(app_version_str)}")
 
                 note_lines.append("")
 
@@ -1421,13 +1424,15 @@ def build_release_notes(built_apps, used_patches_versions, cli_entries, auth_hea
     note_lines.append("## Changelog 📝\n")
     note_lines.append(changelog)
 
-    return "\n".join(note_lines), patches_version, is_prerelease
+    release_brand = sorted(brand_apps.keys())[0]
+
+    return "\n".join(note_lines), patches_version, is_prerelease, release_brand
 
 
-def publish_release(built_apps, release_notes, is_prerelease):
+def publish_release(built_apps, release_notes, is_prerelease, brand, patches_version):
     release_time = datetime.now(ZoneInfo("Asia/Kolkata"))
-    release_tag = "peachmeow-" + release_time.strftime("%Y%m%d-%H%M%S-%f")
-    release_title = f"🐱 PeachMeow · {release_time.strftime('%Y-%m-%d')} · {release_time.strftime('%H:%M')}"
+    release_tag = release_time.strftime("%Y%m%d-%H%M%S-%f")
+    release_title = f"{brand} 🐱 PeachMeow {ensure_v(patches_version)}"
 
     Path("release.md").write_text(release_notes)
 
@@ -1586,14 +1591,14 @@ def _extract_patches_version_from_release_body(body):
     return None
 
 
-def _extract_brand_from_release_body(body):
-    if not body:
+def _extract_brand_from_release_title(title):
+    if not title:
         return None
-    for line in body.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("## 🧩 "):
-            return stripped[len("## 🧩 ") :].strip() or None
-    return None
+    marker = " 🐱 PeachMeow "
+    idx = title.find(marker)
+    if idx == -1:
+        return None
+    return title[:idx].strip() or None
 
 
 def _delete_release_and_tag(tag_name):
@@ -1668,8 +1673,8 @@ def cleanup_releases(config, auth_headers):
 
     releases_by_brand = {}
     for release in all_releases:
-        body = release.get("body") or ""
-        brand = _extract_brand_from_release_body(body)
+        title = release.get("name") or ""
+        brand = _extract_brand_from_release_title(title)
         if not brand:
             continue
         releases_by_brand.setdefault(brand, []).append(release)
@@ -1850,14 +1855,22 @@ def run_release():
             seen_cli_keys.add(cli_key)
             cli_entries.append((item_cli_repo, item_cli_version))
 
-    release_notes, patches_version, is_prerelease = build_release_notes(
+    brands_in_release = {item.get("morphe_brand") or "" for item in release_items}
+    if len(brands_in_release) > 1:
+        die(
+            f"Misconfiguration: multiple morphe-brands detected in the same patches source: {', '.join(sorted(brands_in_release))}. All apps under one patches source must use the same morphe-brand."
+        )
+
+    release_notes, patches_version, is_prerelease, release_brand = build_release_notes(
         built_apps,
         used_patches_versions,
         cli_entries,
         auth_headers,
     )
 
-    publish_release(built_apps, release_notes, is_prerelease)
+    publish_release(
+        built_apps, release_notes, is_prerelease, release_brand, patches_version
+    )
 
     toml_order_sources = [
         app_entry.get("patches-source") or default_patches_repo
