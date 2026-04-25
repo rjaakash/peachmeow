@@ -1,4 +1,9 @@
 {
+  "MorpheApp/morphe-patches": {
+    "pre-release": {
+      "patches": "v1.25.0-dev.3"
+    }
+  },
   "hoo-dles/morphe-patches": {
     "latest": {
       "patches": "v1.27.0"
