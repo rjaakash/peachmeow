@@ -842,6 +842,224 @@ def wait_for_artifacts():
         f.write(f"prefix={prefix}\n")
 
 
+def _build_single_app(
+    app_table_name,
+    app_entry,
+    patches_repo,
+    build_mode,
+    auth_headers,
+    default_brand,
+    default_patches_mode,
+    default_cli_repo,
+    default_cli_mode,
+    default_striplibs_arg,
+    seen_cli_cache,
+    seen_cli_filenames,
+    seen_patches_cache,
+    seen_patches_filenames,
+    downloaded_apks_cache,
+    patches_url_cache,
+    dry_run,
+):
+    log_section(app_table_name)
+
+    patches_mode = resolve_build_mode(
+        build_mode, app_entry, "patches-version", default_patches_mode
+    )
+
+    patches_version, is_prerelease = resolve(
+        patches_repo, patches_mode, headers=auth_headers, strict=True
+    )
+
+    log_sub("Resolved")
+    log_kv("Patches", patches_repo)
+    log_kv("Patches Version", strip_v(patches_version))
+
+    cli_repo = app_entry.get("cli-source") or default_cli_repo
+    cli_resolve_mode = resolve_build_mode(
+        build_mode, app_entry, "cli-version", default_cli_mode
+    )
+
+    cli_version, _ = resolve(
+        cli_repo, cli_resolve_mode, headers=auth_headers, strict=True
+    )
+
+    log_kv("CLI", cli_repo)
+    log_kv("CLI Version", strip_v(cli_version))
+
+    cli_owner, cli_repo_name = cli_repo.split("/")
+    cli_dir = f"tools/{cli_owner}/{cli_repo_name}"
+    os.makedirs(cli_dir, exist_ok=True)
+
+    cli_file, _ = download_tool(
+        "CLI",
+        cli_repo,
+        cli_version,
+        ".jar",
+        cli_dir,
+        seen_cli_cache,
+        seen_cli_filenames,
+        dry_run,
+        auth_headers,
+    )
+
+    patches_owner, patches_repo_name = patches_repo.split("/")
+    patches_dir = f"patches/{patches_owner}/{patches_repo_name}"
+    os.makedirs(patches_dir, exist_ok=True)
+
+    patches_file, _ = download_tool(
+        "Patches",
+        patches_repo,
+        patches_version,
+        ".mpp",
+        patches_dir,
+        seen_patches_cache,
+        seen_patches_filenames,
+        dry_run,
+        auth_headers,
+    )
+
+    package_name = app_entry.get("package-name") or die(app_table_name)
+    brand = app_entry.get("morphe-brand") or default_brand
+    app_name = app_entry.get("app-name")
+    app_display_name = app_name or app_table_name
+    variant = app_entry.get("variant")
+
+    external_apk_url = app_entry.get("apk-url")
+    external_apkm_url = app_entry.get("apkm-url")
+    is_external = bool(external_apk_url or external_apkm_url)
+
+    if is_external:
+        configured_app_version = app_entry.get("app-version")
+        resolved_app_version = (
+            configured_app_version if configured_app_version else "Unknown"
+        )
+    else:
+        app_repo = app_entry.get("app-source") or die(app_table_name)
+        configured_app_version = app_entry.get("app-version")
+        app_version_mode = configured_app_version or "auto"
+
+        if app_version_mode == "auto":
+            patches_json, _ = fetch_patches_list(
+                patches_repo,
+                is_prerelease,
+                app_entry,
+                patches_url_cache,
+            )
+            resolved_app_version = resolve_app_version(
+                app_table_name,
+                package_name,
+                app_display_name,
+                app_repo,
+                patches_json,
+                auth_headers,
+            )
+            release_tag = f"{app_display_name}-{resolved_app_version}"
+            app_release = gh(
+                f"https://api.github.com/repos/{app_repo}/releases/tags/{release_tag}",
+                headers=auth_headers,
+            )
+        elif configured_app_version == "🐱":
+            all_app_releases = gh(
+                f"https://api.github.com/repos/{app_repo}/releases?per_page=100",
+                headers=auth_headers,
+            )
+            app_release = next(
+                (
+                    release_entry
+                    for release_entry in all_app_releases
+                    if not release_entry["prerelease"]
+                ),
+                None,
+            )
+            if not app_release:
+                die(f"No 🐱 found for {app_repo}")
+            resolved_app_version = app_release["tag_name"]
+        else:
+            resolved_app_version = app_version_mode
+            app_release = gh(
+                f"https://api.github.com/repos/{app_repo}/releases/tags/{resolved_app_version}",
+                headers=auth_headers,
+            )
+
+    output_filename = build_output_filename(
+        app_display_name, resolved_app_version, brand, variant, patches_version
+    )
+
+    log_space()
+    log_info(f"Output: {output_filename}")
+
+    if dry_run:
+        return {
+            "app_table_name": app_table_name,
+            "output_filename": output_filename,
+            "resolved_app_version": resolved_app_version,
+            "variant": variant,
+            "app_display_name": app_display_name,
+            "patches_repo": patches_repo,
+            "patches_version": patches_version,
+            "is_prerelease": is_prerelease,
+            "cli_repo": cli_repo,
+            "cli_version": cli_version,
+        }
+
+    log_sub("App")
+    log_kv("Package", package_name)
+    log_kv("App Version", strip_v(resolved_app_version))
+
+    if is_external:
+        input_apk = fetch_external_apk(app_table_name, app_entry, auth_headers)
+    else:
+        input_apk = fetch_and_merge_apk(
+            package_name,
+            app_release,
+            downloaded_apks_cache,
+            app_table_name,
+            auth_headers,
+        )
+
+    ensure_apk(input_apk)
+
+    patch_app(
+        cli_file,
+        patches_file,
+        input_apk,
+        output_filename,
+        app_entry,
+        default_striplibs_arg,
+    )
+
+    metadata = {
+        "source": patches_repo,
+        "mode": patches_mode,
+        "app_table_name": app_table_name,
+        "package_name": package_name,
+        "app_name": app_name if app_name else None,
+        "app_version": resolved_app_version,
+        "morphe_brand": brand,
+        "variant": variant if variant else None,
+        "output": output_filename,
+        "cli_repo": cli_repo,
+        "cli_version": cli_version,
+    }
+
+    Path("build").mkdir(exist_ok=True)
+    Path(f"build/{app_table_name}.json").write_text(json.dumps(metadata, indent=2))
+
+    return {
+        "app_table_name": app_table_name,
+        "output_filename": output_filename,
+        "resolved_app_version": resolved_app_version,
+        "variant": variant,
+        "app_display_name": app_display_name,
+        "patches_repo": patches_repo,
+        "patches_version": patches_version,
+        "is_prerelease": is_prerelease,
+        "cli_repo": cli_repo,
+        "cli_version": cli_version,
+    }
+
+
 def run_build():
     target_source, build_mode, dry_run, auth_headers = init()
     target_app = os.environ.get("PEACHMEOW_APP")
@@ -904,203 +1122,25 @@ def run_build():
         die("Nothing built")
 
     def build_single_app(app_table_name, app_entry, patches_repo):
-        log_section(app_table_name)
-
-        patches_mode = resolve_build_mode(
-            build_mode, app_entry, "patches-version", default_patches_mode
-        )
-
-        patches_version, is_prerelease = resolve(
-            patches_repo, patches_mode, headers=auth_headers, strict=True
-        )
-
-        log_sub("Resolved")
-        log_kv("Patches", patches_repo)
-        log_kv("Patches Version", strip_v(patches_version))
-
-        cli_repo = app_entry.get("cli-source") or default_cli_repo
-        cli_resolve_mode = resolve_build_mode(
-            build_mode, app_entry, "cli-version", default_cli_mode
-        )
-
-        cli_version, _ = resolve(
-            cli_repo, cli_resolve_mode, headers=auth_headers, strict=True
-        )
-
-        log_kv("CLI", cli_repo)
-        log_kv("CLI Version", strip_v(cli_version))
-
-        cli_owner, cli_repo_name = cli_repo.split("/")
-        cli_dir = f"tools/{cli_owner}/{cli_repo_name}"
-        os.makedirs(cli_dir, exist_ok=True)
-
-        cli_file, _ = download_tool(
-            "CLI",
-            cli_repo,
-            cli_version,
-            ".jar",
-            cli_dir,
+        return _build_single_app(
+            app_table_name,
+            app_entry,
+            patches_repo,
+            build_mode,
+            auth_headers,
+            default_brand,
+            default_patches_mode,
+            default_cli_repo,
+            default_cli_mode,
+            default_striplibs_arg,
             set() if is_ci_environment() else seen_cli_cache,
             {} if is_ci_environment() else seen_cli_filenames,
-            dry_run,
-            auth_headers,
-        )
-
-        patches_owner, patches_repo_name = patches_repo.split("/")
-        patches_dir = f"patches/{patches_owner}/{patches_repo_name}"
-        os.makedirs(patches_dir, exist_ok=True)
-
-        patches_file, _ = download_tool(
-            "Patches",
-            patches_repo,
-            patches_version,
-            ".mpp",
-            patches_dir,
             set() if is_ci_environment() else seen_patches_cache,
             {} if is_ci_environment() else seen_patches_filenames,
+            {} if is_ci_environment() else downloaded_apks_cache,
+            {} if is_ci_environment() else patches_url_cache,
             dry_run,
-            auth_headers,
         )
-
-        package_name = app_entry.get("package-name") or die(app_table_name)
-        brand = app_entry.get("morphe-brand") or default_brand
-        app_name = app_entry.get("app-name")
-        app_display_name = app_name or app_table_name
-        variant = app_entry.get("variant")
-
-        external_apk_url = app_entry.get("apk-url")
-        external_apkm_url = app_entry.get("apkm-url")
-        is_external = bool(external_apk_url or external_apkm_url)
-
-        if is_external:
-            configured_app_version = app_entry.get("app-version")
-            resolved_app_version = (
-                configured_app_version if configured_app_version else "Unknown"
-            )
-        else:
-            app_repo = app_entry.get("app-source") or die(app_table_name)
-            configured_app_version = app_entry.get("app-version")
-            app_version_mode = configured_app_version or "auto"
-
-            if app_version_mode == "auto":
-                patches_json, _ = fetch_patches_list(
-                    patches_repo,
-                    is_prerelease,
-                    app_entry,
-                    {} if is_ci_environment() else patches_url_cache,
-                )
-                resolved_app_version = resolve_app_version(
-                    app_table_name,
-                    package_name,
-                    app_display_name,
-                    app_repo,
-                    patches_json,
-                    auth_headers,
-                )
-                release_tag = f"{app_display_name}-{resolved_app_version}"
-                app_release = gh(
-                    f"https://api.github.com/repos/{app_repo}/releases/tags/{release_tag}",
-                    headers=auth_headers,
-                )
-            elif configured_app_version == "🐱":
-                all_app_releases = gh(
-                    f"https://api.github.com/repos/{app_repo}/releases?per_page=100",
-                    headers=auth_headers,
-                )
-                app_release = next(
-                    (
-                        release_entry
-                        for release_entry in all_app_releases
-                        if not release_entry["prerelease"]
-                    ),
-                    None,
-                )
-                if not app_release:
-                    die(f"No 🐱 found for {app_repo}")
-                resolved_app_version = app_release["tag_name"]
-            else:
-                resolved_app_version = app_version_mode
-                app_release = gh(
-                    f"https://api.github.com/repos/{app_repo}/releases/tags/{resolved_app_version}",
-                    headers=auth_headers,
-                )
-
-        output_filename = build_output_filename(
-            app_display_name, resolved_app_version, brand, variant, patches_version
-        )
-
-        log_space()
-        log_info(f"Output: {output_filename}")
-
-        if dry_run:
-            return {
-                "app_table_name": app_table_name,
-                "output_filename": output_filename,
-                "resolved_app_version": resolved_app_version,
-                "variant": variant,
-                "app_display_name": app_display_name,
-                "patches_repo": patches_repo,
-                "patches_version": patches_version,
-                "is_prerelease": is_prerelease,
-                "cli_repo": cli_repo,
-                "cli_version": cli_version,
-            }
-
-        log_sub("App")
-        log_kv("Package", package_name)
-        log_kv("App Version", strip_v(resolved_app_version))
-
-        if is_external:
-            input_apk = fetch_external_apk(app_table_name, app_entry, auth_headers)
-        else:
-            input_apk = fetch_and_merge_apk(
-                package_name,
-                app_release,
-                {} if is_ci_environment() else downloaded_apks_cache,
-                app_table_name,
-                auth_headers,
-            )
-
-        ensure_apk(input_apk)
-
-        patch_app(
-            cli_file,
-            patches_file,
-            input_apk,
-            output_filename,
-            app_entry,
-            default_striplibs_arg,
-        )
-
-        metadata = {
-            "source": patches_repo,
-            "mode": patches_mode,
-            "app_table_name": app_table_name,
-            "package_name": package_name,
-            "app_name": app_name if app_name else None,
-            "app_version": resolved_app_version,
-            "morphe_brand": brand,
-            "variant": variant if variant else None,
-            "output": output_filename,
-            "cli_repo": cli_repo,
-            "cli_version": cli_version,
-        }
-
-        Path("build").mkdir(exist_ok=True)
-        Path(f"build/{app_table_name}.json").write_text(json.dumps(metadata, indent=2))
-
-        return {
-            "app_table_name": app_table_name,
-            "output_filename": output_filename,
-            "resolved_app_version": resolved_app_version,
-            "variant": variant,
-            "app_display_name": app_display_name,
-            "patches_repo": patches_repo,
-            "patches_version": patches_version,
-            "is_prerelease": is_prerelease,
-            "cli_repo": cli_repo,
-            "cli_version": cli_version,
-        }
 
     results = []
     if dry_run:
@@ -1167,6 +1207,130 @@ def run_build():
 
     log_plain_section("Build Complete")
     log_done("Build finished")
+
+
+def parse_test_apps(raw_input, app_entries):
+    parts = [p.strip() for p in raw_input.split(",")]
+    apps = []
+    seen = set()
+    for part in parts:
+        if not part:
+            continue
+        if part not in app_entries:
+            die(f"Unknown app: '{part}'. Valid apps: {', '.join(app_entries.keys())}")
+        if part not in seen:
+            seen.add(part)
+            apps.append(part)
+    if not apps:
+        die("No app names provided. Use --apps 'AppName1, AppName2'")
+    return apps
+
+
+def expand_test_matrix():
+    raw = os.environ.get("TEST_APPS", "").strip()
+    if not raw:
+        die("TEST_APPS env var is required")
+    config = load_config()
+    app_entries = extract_app_entries(config)
+    apps = parse_test_apps(raw, app_entries)
+    print(json.dumps({"include": [{"app": a} for a in apps]}))
+
+
+def run_test_build():
+    import argparse
+    import getpass
+
+    arg_parser = argparse.ArgumentParser()
+    arg_parser.add_argument("--apps", required=True)
+    arg_parser.add_argument("--dry-run", action="store_true")
+    parsed_args = arg_parser.parse_args()
+
+    raw_apps = parsed_args.apps.strip()
+    dry_run = parsed_args.dry_run
+
+    github_pat = read_github_pat_from_env()
+    if not github_pat and not is_ci_environment():
+        log_space()
+        github_pat = getpass.getpass(
+            "Enter your GitHub PAT or press Enter to skip: "
+        ).strip()
+        log_space()
+
+    if github_pat:
+        log_done("PAT accepted")
+    else:
+        log_info("No PAT entered. Running unauthenticated (may hit rate limits)")
+
+    auth_headers = build_auth_headers(github_pat)
+
+    require_env("SIGNING_KEYSTORE_PASSWORD")
+    require_env("SIGNING_KEY_ALIAS")
+    require_env("SIGNING_KEY_PASSWORD")
+
+    config = load_config()
+    defaults = get_config_defaults(config)
+
+    default_patches_repo = defaults["patches_repo"]
+    default_cli_repo = defaults["cli_repo"]
+    default_brand = defaults["brand"]
+    default_patches_mode = defaults["patches_mode"]
+    default_cli_mode = defaults["cli_mode"]
+    default_striplibs_arg = parse_global_striplibs(config)
+
+    app_entries = extract_app_entries(config)
+    apps = parse_test_apps(raw_apps, app_entries)
+
+    log_plain_section("Test Build Start")
+    log_kv("Apps", ", ".join(apps))
+
+    if not dry_run:
+        if is_ci_environment():
+            mkdir_clean("unpatched", "unpatched-external", "tools", "patches", "build")
+        else:
+            mkdir_clean("build")
+            mkdir_ensure("unpatched", "unpatched-external", "tools", "patches")
+
+    for app_table_name in apps:
+        app_entry = app_entries[app_table_name]
+        patches_repo = app_entry.get("patches-source") or default_patches_repo
+        effective_patches_mode = (
+            app_entry.get("patches-version") or default_patches_mode
+        )
+        effective_cli_mode = app_entry.get("cli-version") or default_cli_mode
+        try:
+            result = _build_single_app(
+                app_table_name,
+                app_entry,
+                patches_repo,
+                effective_patches_mode,
+                auth_headers,
+                default_brand,
+                effective_patches_mode,
+                default_cli_repo,
+                effective_cli_mode,
+                default_striplibs_arg,
+                set(),
+                {},
+                set(),
+                {},
+                {},
+                {},
+                dry_run,
+            )
+            if result and not dry_run and not is_ci_environment():
+                output_filename = result["output_filename"]
+                local_output_dir = "/sdcard/Download/🐱 PeachMeow"
+                os.makedirs(local_output_dir, exist_ok=True)
+                shutil.copy2(
+                    f"build/{output_filename}",
+                    f"{local_output_dir}/{output_filename}",
+                )
+                log_done(f"Saved: {local_output_dir}/{output_filename}")
+        except SystemExit:
+            log_info(f"Skipping {app_table_name} due to build failure")
+
+    log_plain_section("Test Build Complete")
+    log_done("Test build finished")
 
 
 def build_release_notes(built_apps, used_patches_versions, cli_entries, auth_headers):
