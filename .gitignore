@@ -3,24 +3,23 @@ __pycache__/
 *.pyo
 *.pyd
 
-temp/
 tools/
 patches/
 build/
+unpatched/
+unpatched-external/
 
 *.apk
 *.apkm
 *.jar
 *.part
-
-*.keystore
-*.jks
-*.p12
 *.bks
-*.b64
-morphe-release.bks
+!peachmeow-community.bks
 
 *.log
+
+build_matrix.json
+release.md
 
 .DS_Store
 Thumbs.db

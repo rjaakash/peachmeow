@@ -249,6 +249,28 @@ def ensure_v(version):
     return f"v{version.lstrip('v')}"
 
 
+def extract_brand_from_tag(tag):
+    if not tag:
+        return None
+    idx = tag.rfind("-v")
+    if idx == -1:
+        idx = tag.rfind("-V")
+    if idx == -1:
+        return None
+    return tag[:idx].strip() or None
+
+
+def extract_patches_version_from_tag(tag):
+    if not tag:
+        return None
+    idx = tag.rfind("-v")
+    if idx == -1:
+        idx = tag.rfind("-V")
+    if idx == -1:
+        return None
+    return tag[idx + 1 :].strip() or None
+
+
 def resolve_build_mode(build_mode, app_entry, config_key, default_mode):
     effective = app_entry.get(config_key) or default_mode
     if effective not in ("latest", "pre-release"):
