@@ -3,5 +3,10 @@
     "latest": {
       "patches": "v1.28.0"
     }
+  },
+  "anddea/revanced-patches": {
+    "latest": {
+      "patches": "v4.0.0"
+    }
   }
 }
