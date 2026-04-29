@@ -4,7 +4,7 @@
       "patches": "v1.24.0"
     },
     "pre-release": {
-      "patches": "v1.25.0-dev.8"
+      "patches": "v1.25.0-dev.9"
     }
   },
   "hoo-dles/morphe-patches": {
