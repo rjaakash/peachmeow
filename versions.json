@@ -1,1 +1,7 @@
-{}
+{
+  "hoo-dles/morphe-patches": {
+    "latest": {
+      "patches": "v1.28.0"
+    }
+  }
+}
