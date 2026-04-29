@@ -9,6 +9,11 @@
       "patches": "v1.28.0"
     }
   },
+  "RookieEnough/De-ReVanced": {
+    "latest": {
+      "patches": "v1.0.3"
+    }
+  },
   "anddea/revanced-patches": {
     "latest": {
       "patches": "v4.0.0"
