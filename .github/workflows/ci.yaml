@@ -214,9 +214,9 @@ jobs:
           python3 scripts/release.py --source "${{ matrix.source }}" --mode "${{ matrix.mode }}"
 
   cleanup-artifacts:
-    needs: release
+    needs: [plan, release]
     runs-on: ubuntu-latest
-    if: needs.plan.outputs.has_builds == 'true'
+    if: always() && needs.plan.outputs.has_builds == 'true'
 
     steps:
       - name: Login to GitHub CLI
