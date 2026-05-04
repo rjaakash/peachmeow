@@ -98,18 +98,18 @@ jobs:
           export PEACHMEOW_GITHUB_PAT="$GH_TOKEN"
           python3 scripts/test.py --apps "${{ matrix.app }}"
 
-      - name: Get APK Name
-        id: apk-name
+      - name: Get APK Path
+        id: apk-path
         run: |
           apk=$(ls build/*.apk 2>/dev/null | head -n1)
           if [ -z "$apk" ]; then
             echo "No APK found" >&2
             exit 1
           fi
-          echo "name=$(basename "$apk" .apk)" >> $GITHUB_OUTPUT
+          echo "path=$apk" >> $GITHUB_OUTPUT
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ steps.apk-name.outputs.name }}
-          path: build/*.apk
+          path: ${{ steps.apk-path.outputs.path }}
+          archive: false
