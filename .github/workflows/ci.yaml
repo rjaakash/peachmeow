@@ -3,8 +3,8 @@ name: CI
 on:
   workflow_dispatch:
   schedule:
-        - cron: "0 4,16 * * *"
-          timezone: "Asia/Kolkata"
+    - cron: "0 */6 * * *"
+      timezone: "Asia/Kolkata"
 
 permissions:
   contents: write
