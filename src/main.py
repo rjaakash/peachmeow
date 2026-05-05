@@ -1165,42 +1165,76 @@ def generate_build_matrix():
 
     app_entries = extract_app_entries(config)
 
+    patches_source_filter_raw = os.environ.get("PATCHES_SOURCE", "").strip()
+    patches_source_filter = (
+        {s.strip() for s in patches_source_filter_raw.split(",") if s.strip()}
+        if patches_source_filter_raw
+        else set()
+    )
+
+    patches_version_filter = os.environ.get("PATCHES_VERSION", "").strip()
+
+    all_sources = set()
+    all_versions = set()
+    for app_entry in app_entries.values():
+        if app_entry.get("enabled", True) is False:
+            continue
+        all_sources.add(app_entry.get("patches-source") or default_patches_repo)
+        all_versions.add(app_entry.get("patches-version") or default_patches_mode)
+
+    if patches_source_filter:
+        invalid_sources = patches_source_filter - all_sources
+        if invalid_sources:
+            die(
+                f"Invalid patches-source: {', '.join(sorted(invalid_sources))}. Valid sources: {', '.join(sorted(all_sources))}"
+            )
+
+    if patches_version_filter:
+        if patches_version_filter not in all_versions:
+            die(
+                f"Invalid patches-version: {patches_version_filter!r}. Valid versions: {', '.join(sorted(all_versions))}"
+            )
+
     repo_modes = {}
     for app_entry in app_entries.values():
         if app_entry.get("enabled", True) is False:
             continue
         patches_repo = app_entry.get("patches-source") or default_patches_repo
+        if patches_source_filter and patches_repo not in patches_source_filter:
+            continue
         patches_mode = app_entry.get("patches-version") or default_patches_mode
+        if patches_version_filter and patches_mode != patches_version_filter:
+            continue
         repo_modes.setdefault(patches_repo, set()).add(patches_mode)
+
+    def _should_emit_prerelease(repo):
+        upstream_latest, upstream_absolutely_latest = resolve_channels(
+            repo, headers=auth_headers
+        )
+        if upstream_absolutely_latest and upstream_latest:
+            pre_base = (
+                upstream_absolutely_latest.split("-dev", 1)[0]
+                if "-dev" in upstream_absolutely_latest
+                else upstream_absolutely_latest
+            )
+            return Version(pre_base) > Version(upstream_latest)
+        return bool(upstream_absolutely_latest and not upstream_latest)
 
     matrix_items = []
     for repo, modes in repo_modes.items():
-        has_prerelease = "pre-release" in modes
-        specific_tags = {m for m in modes if m not in ("latest", "pre-release")}
-
-        if has_prerelease:
-            upstream_latest, upstream_absolutely_latest = resolve_channels(
-                repo, headers=auth_headers
-            )
-            emit_prerelease = False
-            if upstream_absolutely_latest and upstream_latest:
-                pre_base = (
-                    upstream_absolutely_latest.split("-dev", 1)[0]
-                    if "-dev" in upstream_absolutely_latest
-                    else upstream_absolutely_latest
-                )
-                if Version(pre_base) > Version(upstream_latest):
-                    emit_prerelease = True
-            elif upstream_absolutely_latest and not upstream_latest:
-                emit_prerelease = True
-            matrix_items.append({"source": repo, "mode": "latest"})
-            if emit_prerelease:
-                matrix_items.append({"source": repo, "mode": "pre-release"})
+        if patches_version_filter:
+            if patches_version_filter == "pre-release":
+                if _should_emit_prerelease(repo):
+                    matrix_items.append({"source": repo, "mode": "pre-release"})
+            else:
+                matrix_items.append({"source": repo, "mode": patches_version_filter})
         else:
+            specific_tags = {m for m in modes if m not in ("latest", "pre-release")}
             matrix_items.append({"source": repo, "mode": "latest"})
-
-        for tag in sorted(specific_tags):
-            matrix_items.append({"source": repo, "mode": tag})
+            if "pre-release" in modes and _should_emit_prerelease(repo):
+                matrix_items.append({"source": repo, "mode": "pre-release"})
+            for tag in sorted(specific_tags):
+                matrix_items.append({"source": repo, "mode": tag})
 
     Path("build_matrix.json").write_text(json.dumps({"include": matrix_items}))
 

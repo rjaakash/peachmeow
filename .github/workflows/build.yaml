@@ -2,6 +2,15 @@ name: Build
 
 on:
   workflow_dispatch:
+    inputs:
+      patches-source:
+        description: "Patches Source:"
+        required: false
+        default: ""
+      patches-version:
+        description: "Patches Version:"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -19,6 +28,9 @@ jobs:
 
       - name: Generate Build List
         id: compute-matrix
+        env:
+          PATCHES_SOURCE: ${{ github.event.inputs.patches-source }}
+          PATCHES_VERSION: ${{ github.event.inputs.patches-version }}
         run: |
           if [ "${{ github.repository }}" = "rjaakash/peachmeow" ]; then
             export PEACHMEOW_GITHUB_PAT="${{ secrets.PEACHMEOW_GITHUB_PAT }}"

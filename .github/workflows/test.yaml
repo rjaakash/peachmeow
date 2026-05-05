@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       apps:
-        description: "App table names (comma or space separated, e.g. YouTube, Music)"
+        description: "App Table Name:"
         required: true
         type: string
 
