@@ -1450,6 +1450,10 @@ def build_release_notes(built_apps, used_patches_versions, cli_entries, auth_hea
 
     patches_version_link = f"[{ensure_v(patches_version)}](https://github.com/{patches_repo}/releases/tag/{patches_version})"
 
+    note_lines.append(
+        '<p align="center"><img src="https://raw.githubusercontent.com/rjaakash/peachmeow/main/assets/peach-celebrate.gif" width="140"/></p>\n'
+    )
+
     note_lines.append("## Build Info ℹ️\n")
     note_lines.append(f"- Patches: {patches_version_link}")
     if len(deduped_cli_entries) == 1:

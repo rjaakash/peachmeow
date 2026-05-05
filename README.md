@@ -1,5 +1,11 @@
 # 🐱 PeachMeow — Config‑driven Morphe Patches Builder
 
+<p align="center">
+  <img src="assets/peach-heart.gif" width="170"/>
+</p>
+
+<br>
+
 PeachMeow is a GitHub‑Actions based Morphe patches builder.
 
 You describe everything in `config.toml` — PeachMeow reads it, fetches upstream patches + CLI, and uses them to patch your apps and publish releases automatically.
