@@ -187,12 +187,18 @@ def resolve_app_version(
 
     for patch_entry in patches_json.get("patches", []):
         compatible_packages = patch_entry.get("compatiblePackages")
-        if not isinstance(compatible_packages, dict):
-            continue
-        if package_name in compatible_packages:
-            pkg_compat_versions = compatible_packages[package_name]
-            if pkg_compat_versions:
-                compatible_versions |= set(pkg_compat_versions)
+        if isinstance(compatible_packages, dict):
+            if package_name in compatible_packages:
+                pkg_compat_versions = compatible_packages[package_name]
+                if pkg_compat_versions:
+                    compatible_versions |= set(pkg_compat_versions)
+        elif isinstance(compatible_packages, list):
+            for pkg in compatible_packages:
+                if pkg.get("packageName") != package_name:
+                    continue
+                for target in pkg.get("targets") or []:
+                    if not target.get("isExperimental", True) and target.get("version"):
+                        compatible_versions.add(target["version"])
 
     release_list = gh(
         f"https://api.github.com/repos/{app_repo}/releases?per_page=100",
