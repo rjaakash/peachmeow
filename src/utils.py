@@ -370,14 +370,6 @@ def get_latest_asset(assets: List[Dict]) -> Dict:
     )[0]
 
 
-def gh_blob_to_raw(blob_url):
-    if "github.com" in blob_url and "/blob/" in blob_url:
-        return blob_url.replace(
-            "https://github.com/", "https://raw.githubusercontent.com/"
-        ).replace("/blob/", "/")
-    return blob_url
-
-
 def run(cmd):
     print(f"{SKY}[RUN]{RESET} {' '.join(cmd)}", flush=True)
     proc_result = subprocess.run(cmd)

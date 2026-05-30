@@ -6,7 +6,6 @@ import shlex
 import shutil
 import subprocess
 import time
-import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from packaging.version import Version
@@ -42,7 +41,6 @@ from utils import (
     resolve,
     resolve_channels,
     get_latest_asset,
-    gh_blob_to_raw,
     run,
     ensure_apk,
     mkdir_clean,
@@ -90,7 +88,6 @@ def download_tool(
     download_dir,
     seen_cache,
     seen_filenames,
-    dry_run,
     auth_headers,
 ):
     cache_key = (tool_repo, tool_version)
@@ -127,9 +124,8 @@ def download_tool(
     log_sub(tool_label)
     log_kv(f"{tool_label} File", filename)
 
-    if not dry_run:
-        if download_with_retry(download_url, filepath) != 0:
-            die(f"{tool_label} download failed")
+    if download_with_retry(download_url, filepath) != 0:
+        die(f"{tool_label} download failed")
 
     seen_cache.add(cache_key)
     seen_filenames[cache_key] = filename
@@ -137,68 +133,42 @@ def download_tool(
     return filepath, filename
 
 
-def _patches_list_disk_cache_path(patches_list_url):
-    try:
-        if "raw.githubusercontent.com" in patches_list_url:
-            stripped = patches_list_url.replace(
-                "https://raw.githubusercontent.com/", ""
-            )
-            parts = stripped.split("/")
-            return (
-                Path("patches") / parts[0] / parts[1] / f"patches-list-{parts[2]}.json"
-            )
-    except Exception:
-        pass
-    return None
-
-
-def fetch_patches_list(patches_repo, is_prerelease, app_config, patches_url_cache):
-    if app_config.get("patches-list"):
-        patches_list_url = gh_blob_to_raw(app_config.get("patches-list"))
-    else:
-        branch = "dev" if is_prerelease else "main"
-        patches_list_url = f"https://raw.githubusercontent.com/{patches_repo}/{branch}/patches-list.json"
-
-    if patches_list_url in patches_url_cache:
-        log_cache(f"Patches-list: {patches_list_url}")
-        return patches_url_cache[patches_list_url], patches_list_url
-
-    disk_cache_path = _patches_list_disk_cache_path(patches_list_url)
-    if disk_cache_path and disk_cache_path.exists():
-        log_cache(f"Patches-list: {patches_list_url}")
-        patches_json = json.loads(disk_cache_path.read_text())
-        patches_url_cache[patches_list_url] = patches_json
-        return patches_json, patches_list_url
-
-    patches_json = requests.get(patches_list_url, timeout=60).json()
-    patches_url_cache[patches_list_url] = patches_json
-
-    if disk_cache_path:
-        disk_cache_path.parent.mkdir(parents=True, exist_ok=True)
-        disk_cache_path.write_text(json.dumps(patches_json))
-
-    return patches_json, patches_list_url
-
-
 def resolve_app_version(
-    app_table_name, package_name, app_display_name, app_repo, patches_json, auth_headers
+    app_table_name,
+    package_name,
+    app_display_name,
+    app_repo,
+    cli_file,
+    patches_file,
+    auth_headers,
 ):
+    result = subprocess.run(
+        [
+            "java",
+            "-jar",
+            cli_file,
+            "list-versions",
+            f"--patches={patches_file}",
+            "-f",
+            package_name,
+        ],
+        capture_output=True,
+        text=True,
+    )
+    output = result.stdout + result.stderr
     compatible_versions = set()
-
-    for patch_entry in patches_json.get("patches", []):
-        compatible_packages = patch_entry.get("compatiblePackages")
-        if isinstance(compatible_packages, dict):
-            if package_name in compatible_packages:
-                pkg_compat_versions = compatible_packages[package_name]
-                if pkg_compat_versions:
-                    compatible_versions |= set(pkg_compat_versions)
-        elif isinstance(compatible_packages, list):
-            for pkg in compatible_packages:
-                if pkg.get("packageName") != package_name:
-                    continue
-                for target in pkg.get("targets") or []:
-                    if not target.get("isExperimental", True) and target.get("version"):
-                        compatible_versions.add(target["version"])
+    in_versions_section = False
+    for line in output.splitlines():
+        if "Most common compatible versions:" in line:
+            in_versions_section = True
+            continue
+        if in_versions_section:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            version_match = re.match(r"^(\S+)\s+\(\d+\s+patches?\)", stripped)
+            if version_match:
+                compatible_versions.add(version_match.group(1))
 
     release_list = gh(
         f"https://api.github.com/repos/{app_repo}/releases?per_page=100",
@@ -455,7 +425,6 @@ def _build_single_app(
     seen_patches_cache,
     seen_patches_filenames,
     downloaded_apks_cache,
-    patches_url_cache,
     dry_run,
 ):
     log_section(app_table_name)
@@ -496,7 +465,6 @@ def _build_single_app(
         cli_dir,
         seen_cli_cache,
         seen_cli_filenames,
-        dry_run,
         auth_headers,
     )
 
@@ -512,7 +480,6 @@ def _build_single_app(
         patches_dir,
         seen_patches_cache,
         seen_patches_filenames,
-        dry_run,
         auth_headers,
     )
 
@@ -537,18 +504,13 @@ def _build_single_app(
         app_version_mode = configured_app_version or "auto"
 
         if app_version_mode == "auto":
-            patches_json, _ = fetch_patches_list(
-                patches_repo,
-                is_prerelease,
-                app_entry,
-                patches_url_cache,
-            )
             resolved_app_version = resolve_app_version(
                 app_table_name,
                 package_name,
                 app_display_name,
                 app_repo,
-                patches_json,
+                cli_file,
+                patches_file,
                 auth_headers,
             )
             release_tag = f"{app_display_name}-{resolved_app_version}"
@@ -917,7 +879,6 @@ def run_build():
     seen_cli_filenames = {}
     seen_patches_filenames = {}
     downloaded_apks_cache = {}
-    patches_url_cache = {}
 
     if target_source:
         patches_sources = [target_source]
@@ -965,7 +926,6 @@ def run_build():
             set() if is_ci_environment() else seen_patches_cache,
             {} if is_ci_environment() else seen_patches_filenames,
             {} if is_ci_environment() else downloaded_apks_cache,
-            {} if is_ci_environment() else patches_url_cache,
             dry_run,
         )
 
@@ -1139,7 +1099,6 @@ def run_test_build():
                 set(),
                 {},
                 set(),
-                {},
                 {},
                 {},
                 dry_run,
