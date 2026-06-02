@@ -27,13 +27,6 @@ patches-source = "hoo-dles/morphe-patches"
 morphe-brand = "hoodles"
 patcher-args = "-f"
 
-["XRecorder hoodles"]
-package-name = "videoeditor.videorecorder.screenrecorder"
-app-name = "XRecorder"
-app-source = "rjaakash/peachmeow-store"
-patches-source = "hoo-dles/morphe-patches"
-morphe-brand = "hoodles"
-
 ["Photos De-ReVanced"]
 package-name = "com.google.android.apps.photos"
 app-name = "Photos"
