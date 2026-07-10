@@ -22,7 +22,7 @@
       "patches": "v4.1.0"
     },
     "pre-release": {
-      "patches": "v4.2.0-dev.3"
+      "patches": "v4.2.0-dev.4"
     }
   }
 }
