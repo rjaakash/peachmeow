@@ -1,7 +1,7 @@
 {
   "MorpheApp/morphe-patches": {
     "latest": {
-      "patches": "v1.33.0"
+      "patches": "v1.34.0"
     },
     "pre-release": {
       "patches": "v1.33.0-dev.10"
