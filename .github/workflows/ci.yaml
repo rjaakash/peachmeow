@@ -18,7 +18,7 @@ jobs:
       has_builds: ${{ steps.run-plan.outputs.has_builds }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Checking for Updates
         id: run-plan
@@ -64,7 +64,7 @@ jobs:
       has_builds: ${{ steps.expand-per-app.outputs.has_builds }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Configure App Builds
         id: expand-per-app
@@ -86,7 +86,7 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set Up Java
         uses: actions/setup-java@v5
@@ -172,7 +172,7 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Wait for Artifacts
         id: wait-artifacts
