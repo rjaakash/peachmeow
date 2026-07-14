@@ -372,7 +372,6 @@ def patch_app(
             patches_file,
             "-o",
             f"build/{output_filename}",
-            "--purge",
             input_apk,
         ]
         + final_patcher_args
