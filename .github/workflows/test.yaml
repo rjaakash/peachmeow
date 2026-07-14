@@ -20,7 +20,7 @@ jobs:
       has_builds: ${{ steps.expand.outputs.has_builds }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Expand App Matrix
         id: expand
@@ -42,7 +42,7 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set Up Java
         uses: actions/setup-java@v5
