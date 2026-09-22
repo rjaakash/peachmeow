@@ -1,4 +1,9 @@
 {
+  "RookieEnough/De-Vanced": {
+    "latest": {
+      "patches": "v1.4.4"
+    }
+  },
   "hoo-dles/morphe-patches": {
     "latest": {
       "patches": "v1.44.1"
