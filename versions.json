@@ -1,4 +1,9 @@
 {
+  "MorpheApp/morphe-patches": {
+    "latest": {
+      "patches": "v1.44.0"
+    }
+  },
   "RookieEnough/De-Vanced": {
     "latest": {
       "patches": "v1.4.4"
