@@ -12,6 +12,11 @@
       "patches": "v1.6.4"
     }
   },
+  "crimera/piko-newx": {
+    "latest": {
+      "patches": "v3.75.0"
+    }
+  },
   "hoo-dles/morphe-patches": {
     "latest": {
       "patches": "v1.47.0"
