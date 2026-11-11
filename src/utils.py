@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import json
 import time
@@ -247,6 +248,10 @@ def ensure_v(version):
     if not version:
         return version
     return f"v{version.lstrip('v')}"
+
+
+def app_version_key(version):
+    return tuple(int(part) for part in re.findall(r"\d+", version))
 
 
 def extract_brand_from_tag(tag):

@@ -34,6 +34,7 @@ from utils import (
     parse_global_striplibs,
     strip_v,
     ensure_v,
+    app_version_key,
     extract_brand_from_tag,
     extract_patches_version_from_tag,
     resolve_build_mode,
@@ -183,20 +184,18 @@ def resolve_app_version(
         version_str = release_tag[len(app_display_name) + 1 :]
         if version_str.startswith("v"):
             continue
-        try:
-            Version(version_str)
-            available_versions.append(version_str)
-        except Exception:
+        if not app_version_key(version_str):
             continue
+        available_versions.append(version_str)
 
     if compatible_versions:
         version_candidates = sorted(
-            set(compatible_versions) & set(available_versions), key=Version
+            set(compatible_versions) & set(available_versions), key=app_version_key
         )
         if not version_candidates:
             die(f"{app_table_name}: no compatible versions found")
     else:
-        version_candidates = sorted(available_versions, key=Version)
+        version_candidates = sorted(available_versions, key=app_version_key)
 
     if not version_candidates:
         die(f"{app_table_name}: no versions available")
