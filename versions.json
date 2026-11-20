@@ -21,5 +21,10 @@
     "latest": {
       "patches": "v0.0.21"
     }
+  },
+  "crimera/piko": {
+    "latest": {
+      "patches": "v3.11.1"
+    }
   }
 }
