@@ -1,1 +1,7 @@
-{}
+{
+  "MorpheApp/morphe-patches": {
+    "pre-release": {
+      "patches": "v2.4.0-dev.6"
+    }
+  }
+}
