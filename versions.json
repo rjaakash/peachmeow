@@ -16,5 +16,10 @@
     "latest": {
       "patches": "v4.3.0"
     }
+  },
+  "SysAdminDoc/HushGram": {
+    "latest": {
+      "patches": "v0.0.21"
+    }
   }
 }
