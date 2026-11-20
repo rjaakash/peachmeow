@@ -18,28 +18,31 @@ cli-version = "pre-release"
 package-name = "com.reddit.frontpage"
 app-source = "rjaakash/peachmeow-store"
 
-["Proton VPN hoodles"]
-package-name = "ch.protonvpn.android"
-app-name = "ProtonVPN"
-app-source = "ProtonVPN/android-app"
-app-version = "🐱"
-patches-source = "hoo-dles/morphe-patches"
-morphe-brand = "hoodles"
-patcher-args = "-f"
-
-["Photos De-ReVanced"]
+["Photos De-Vanced"]
 package-name = "com.google.android.apps.photos"
 app-name = "Photos"
 app-source = "rjaakash/peachmeow-store"
-patches-source = "RookieEnough/De-ReVanced"
-morphe-brand = "De-ReVanced"
+patches-source = "RookieEnough/De-Vanced"
+morphe-brand = "De-Vanced"
 patcher-args = "-e 'Enable DCIM folders backup control'"
 
-["YouTube Anddea"]
-package-name = "com.google.android.youtube"
-app-name = "YouTube"
+["GboardWu"]
+package-name = "com.google.android.inputmethod.latin"
+app-name = "Gboard"
 app-source = "rjaakash/peachmeow-store"
-patches-source = "anddea/revanced-patches"
-patches-version = "pre-release"
-morphe-brand = "Anddea"
-patcher-args = "-e 'Custom header for YouTube' -e 'MaterialYou' -e 'Theme' -e 'Custom Shorts action buttons' -OiconType=outline -e 'Custom branding icon for YouTube' -OappIcon=afn_blue -OrestoreOldSplashAnimation=true -e 'Overlay buttons' -OiconType=thin -e 'Settings for YouTube' -OrvxSettingsLabel=Anddea -e 'Visual preferences icons for YouTube' -OsettingsMenuIcon=rvx_letters_bold -OapplyToAll=false"
+patches-source = "jasonwu1994/Gboard-patches"
+morphe-brand = "Wu"
+
+["HushGram"]
+package-name = "com.instagram.android"
+app-name = "Instagram"
+app-source = "rjaakash/peachmeow-store"
+patches-source = "SysAdminDoc/HushGram"
+morphe-brand = "Hush"
+
+["X Piko"]
+package-name = "com.twitter.android"
+app-name = "X"
+app-source = "rjaakash/peachmeow-store"
+patches-source = "crimera/piko"
+morphe-brand = "Piko"

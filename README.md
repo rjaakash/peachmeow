@@ -30,7 +30,7 @@ Just set up your `config.toml` by following CONFIG.md.
 
 All APKs published in GitHub Releases are **Official 🐱 PeachMeow Builds**.
 
-All builds are produced and published by 🌚 [me](https://github.com/rjaakash) via **[GitHub Actions](https://github.com/apps/github-actions)** using patches and tools from upstream projects (Morphe, De-ReVanced, hoodles, Anddea, etc.).
+All builds are produced and published by 🌚 [me](https://github.com/rjaakash) via **[GitHub Actions](https://github.com/apps/github-actions)** using patches and tools from upstream projects (Morphe, De-Vanced, Wu, Hush, Piko, etc.).
 
 These builds are not official releases from upstream projects or their maintainers.
 
