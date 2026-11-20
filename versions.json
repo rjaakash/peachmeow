@@ -3,5 +3,10 @@
     "pre-release": {
       "patches": "v2.4.0-dev.6"
     }
+  },
+  "jasonwu1994/Gboard-patches": {
+    "latest": {
+      "patches": "v4.3.0"
+    }
   }
 }
