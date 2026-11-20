@@ -4,6 +4,11 @@
       "patches": "v2.4.0-dev.6"
     }
   },
+  "RookieEnough/De-Vanced": {
+    "latest": {
+      "patches": "v1.6.4"
+    }
+  },
   "jasonwu1994/Gboard-patches": {
     "latest": {
       "patches": "v4.3.0"
